@@ -55,6 +55,8 @@ import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.broad.igv.prefs.Constants.SAM_HIDE_SMALL_INDEL;
+
 /**
  * @author jrobinso
  */
@@ -685,10 +687,13 @@ public class SAMAlignment implements Alignment {
         int basePosition = (int) position;
         StringBuffer buf = new StringBuffer();
 
-        if (getHaplotypeName() != null) {
-            buf.append("Hap name: " + getHaplotypeName() + "<br>");
-            buf.append("Dist: " + getHapDistance() + "<br>");
+        if (getClusterName() != null) {
+            buf.append("Cluster name: " + getClusterName() + "<br>");
+            buf.append("Dist: " + getClusterDistance() + "<br>");
         }
+
+        boolean hideSmallIndels = renderOptions.isHideSmallIndels();
+        int smallIndelThreshold = renderOptions.getSmallIndelThreshold();
 
         boolean atInsertion = false;
         boolean atBaseMod = false;
@@ -696,6 +701,9 @@ public class SAMAlignment implements Alignment {
         if (this.insertions != null) {
             for (AlignmentBlock block : this.insertions) {
                 if (block.containsPixel(mouseX)) {
+                    if(hideSmallIndels && block.getBasesLength() < smallIndelThreshold) {
+                        continue;
+                    }
                     ByteSubarray bases = block.getBases();
                     if (bases == null) {
                         buf.append("Insertion: " + block.getLength() + " bases<br>");
@@ -939,7 +947,7 @@ public class SAMAlignment implements Alignment {
                 }
                 buf.append("<br>" + tag.tag + " = ");
 
-                if (tag.tag.equals("Ml")) {
+                if (tag.tag.equals("ML") || tag.tag.equals("Ml")) {
                     buf.append(this.getMlTagString(tag));
                     buf.append("<br>");
                     continue;
@@ -1215,12 +1223,12 @@ public class SAMAlignment implements Alignment {
     String haplotypeName;
 
     @Override
-    public void setHaplotypeName(String hap) {
+    public void setClusterName(String hap) {
         haplotypeName = hap;
     }
 
     @Override
-    public String getHaplotypeName() {
+    public String getClusterName() {
         return haplotypeName;
     }
 
@@ -1232,7 +1240,7 @@ public class SAMAlignment implements Alignment {
     }
 
     @Override
-    public int getHapDistance() {
+    public int getClusterDistance() {
         return hapDistance;
     }
 

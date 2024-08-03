@@ -1093,6 +1093,14 @@ public class IGV implements IGVEventObserver {
         contentPane.getMainPanel().removeDataPanel(name);
     }
 
+    public void removeTrackPanel(TrackPanel trackPanel) {
+        contentPane.getMainPanel().removeTrackPanel(trackPanel);
+    }
+
+    public boolean panelIsRemovable(TrackPanel trackPanel) {
+        return contentPane.getMainPanel().panelIsRemovable(trackPanel);
+    }
+
     public MainPanel getMainPanel() {
         return contentPane.getMainPanel();
     }
@@ -1932,11 +1940,16 @@ public class IGV implements IGVEventObserver {
                         GenomeManager.getInstance().loadGenomeById(genomeId);
                         genomeLoaded = true;
                     } catch (Exception e) {
-                        MessageUtils.showErrorMessage("Error loading genome: " + genomeId, e);
-                        log.error("Error loading genome: " + genomeId, e);
-                    }
+                        MessageUtils.showErrorMessage("Error loading genome " + genomeId + "<br/>" + e.getMessage(), e);
+                        genomeLoaded = false;
+                     }
 
                     if (!genomeLoaded) {
+                        // If the error is with the default genome try refreshing it.
+                        if(genomeId.equals(GenomeListManager.DEFAULT_GENOME.getId())) {
+                            GenomeManager.getInstance().refreshHostedGenome(genomeId);
+                        }
+
                         genomeId = GenomeListManager.DEFAULT_GENOME.getId();
                         try {
                             GenomeManager.getInstance().loadGenomeById(genomeId);

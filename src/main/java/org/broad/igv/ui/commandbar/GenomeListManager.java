@@ -39,9 +39,9 @@ public class GenomeListManager {
     private static final String ACT_USER_DEFINED_GENOME_LIST_FILE = "user-defined-genomes.txt";
 
     public static final GenomeListItem DEFAULT_GENOME = new GenomeListItem(
-            "Human (hg19)",
-            "https://s3.amazonaws.com/igv.org.genomes/hg19/hg19.json",
-            "hg19");
+            "Human (hg38)",
+            "https://igv-genepattern-org.s3.amazonaws.com/genomes/hg38/hg38.json",
+            "hg38");
 
     private Map<String, GenomeListItem> genomeItemMap;
 
@@ -311,9 +311,19 @@ public class GenomeListManager {
 
 
     public void removeGenomeListItem(GenomeListItem genomeListItem) {
-
         final String id = genomeListItem.getId();
         genomeItemMap.remove(id);
+
+        // If this is a cached genome remove it from cache
+        Map<String, GenomeListItem> cachedItems = getCachedGenomeList();
+        if(cachedItems.containsKey(id)){
+            try {
+                (new File(genomeListItem.getPath())).delete();
+            } catch (Exception e) {
+                log.error("Error deleting genome file: " + genomeListItem.getPath() + ": " + e.getMessage());
+            }
+        }
+
         removeUserDefinedGenome(id);
     }
 
