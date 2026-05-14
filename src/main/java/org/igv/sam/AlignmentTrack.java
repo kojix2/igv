@@ -662,18 +662,31 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
             // Loop through the alignment rows for this group
             // Create a snapshot to avoid ConcurrentModificationException from background loading threads
             List<Row> rows = new ArrayList<>(entry.getValue());
-            for (Row row : rows) {
-                if (y > clipBounds.getMaxY()) {
-                    break;
-                }
-
-                if (y + intH > clipBounds.y) {
-                    Rectangle rowRectangle = new Rectangle(alignmentsRect.x, (int) y, alignmentsRect.width, intH);
+            if (groupOption == GroupOption.NONE && nGroups == 1) {
+                VisibleRowRange visibleRowRange = computeVisibleRowRange(clipBounds, alignmentsRect.y, intH, rows.size());
+                for (int i = visibleRowRange.firstRow; i < visibleRowRange.lastRow; i++) {
+                    Row row = rows.get(i);
+                    double rowY = alignmentsRect.y + i * intH;
+                    Rectangle rowRectangle = new Rectangle(alignmentsRect.x, (int) rowY, alignmentsRect.width, intH);
                     renderer.renderAlignments(row.alignments, alignmentCounts, context, rowRectangle, renderOptions);
-                    row.y = y;
+                    row.y = rowY;
                     row.h = intH;
                 }
-                y += intH;
+                y += rows.size() * intH;
+            } else {
+                for (Row row : rows) {
+                    if (y > clipBounds.getMaxY()) {
+                        break;
+                    }
+
+                    if (y + intH > clipBounds.y) {
+                        Rectangle rowRectangle = new Rectangle(alignmentsRect.x, (int) y, alignmentsRect.width, intH);
+                        renderer.renderAlignments(row.alignments, alignmentCounts, context, rowRectangle, renderOptions);
+                        row.y = y;
+                        row.h = intH;
+                    }
+                    y += intH;
+                }
             }
 
             if (groupOption != GroupOption.NONE) {
@@ -705,6 +718,28 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
 
         final int bottom = alignmentsRect.y + alignmentsRect.height;
         groupBorderGraphics.drawLine(alignmentsRect.x, bottom, alignmentsRect.width, bottom);
+    }
+
+    static VisibleRowRange computeVisibleRowRange(Rectangle clipBounds, double alignmentsY, int rowHeight, int rowCount) {
+        if (rowCount <= 0) {
+            return new VisibleRowRange(0, 0);
+        }
+
+        int firstRow = Math.min(rowCount,
+                Math.max(0, (int) Math.floor((clipBounds.y - alignmentsY) / rowHeight) - 1));
+        int lastRow = Math.min(rowCount, (int) Math.ceil((clipBounds.getMaxY() - alignmentsY) / rowHeight) + 1);
+        lastRow = Math.max(firstRow, lastRow);
+        return new VisibleRowRange(firstRow, lastRow);
+    }
+
+    static class VisibleRowRange {
+        final int firstRow;
+        final int lastRow;
+
+        VisibleRowRange(int firstRow, int lastRow) {
+            this.firstRow = firstRow;
+            this.lastRow = lastRow;
+        }
     }
 
     /**
