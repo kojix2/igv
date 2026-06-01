@@ -816,6 +816,16 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
         }
     }
 
+    public void sortRows(final SortOption option, final String tag, final boolean invertSort, final double location) {
+        final List<ReferenceFrame> frames = FrameManager.getFrames();
+        for (ReferenceFrame frame : frames) {
+            final AlignmentInterval interval = getDataManager().getLoadedInterval(frame);
+            if (interval != null) {
+                interval.sortRows(option, location, tag, invertSort);
+            }
+        }
+    }
+
     /**
      * Sort alignment rows for a specific reference frame using track render settings.  This is called on locus
      * change and data load events.

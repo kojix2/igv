@@ -2,8 +2,10 @@ package org.igv.sam;
 
 import htsjdk.samtools.util.Locatable;
 import org.igv.feature.genome.ChromosomeNameComparator;
+import org.igv.sam.mods.BaseModificationSet;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.ToIntFunction;
@@ -62,6 +64,14 @@ public enum SortOption {
                     .thenComparing(insertionComparator)
                     .thenComparingInt(baseQualityCompare);
 
+        }
+    }, BASE_MODIFICATION {
+        @Override
+        Comparator<Alignment> getAlignmentComparator(final int center, final String tag, final byte referenceBase) {
+            return Comparator.comparing(
+                            (Alignment a) -> getBaseModificationLikelihood(a, center, tag),
+                            Comparator.nullsLast(Comparator.reverseOrder()))
+                    .thenComparingInt(Alignment::getAlignmentStart);
         }
     }, QUALITY {
         @Override
@@ -163,7 +173,7 @@ public enum SortOption {
     public Comparator<Row> getComparator(final int center, final byte reference, final String tag, boolean invertSort) {
         Comparator<Alignment> alignmentComparator = getAlignmentComparator(center, tag, reference);
         if (invertSort) alignmentComparator = alignmentComparator.reversed();
-        return Comparator.comparing((Row row) -> AlignmentInterval.getFeatureContaining(row.getAlignments(), center),
+        return Comparator.comparing((Row row) -> getFeatureContaining(row.getAlignments(), center, tag),
                 Comparator.nullsLast(alignmentComparator));
 
     }
@@ -171,6 +181,85 @@ public enum SortOption {
     // private method to save a few lines of code in each comparator since they all would have to start with getting the
     // center alignment anyway
     abstract Comparator<Alignment> getAlignmentComparator(final int center, final String tag, final byte referenceBase);
+
+    private Alignment getFeatureContaining(List<Alignment> alignments, int position, String tag) {
+        Alignment alignment = AlignmentInterval.getFeatureContaining(alignments, position);
+        if (this == BASE_MODIFICATION && "m".equals(tag)) {
+            for (int candidatePosition : new int[]{position, position - 1, position + 1}) {
+                Alignment candidate = AlignmentInterval.getFeatureContaining(alignments, candidatePosition);
+                if (candidate != null && getBaseModificationLikelihood(candidate, position, tag) != null) {
+                    return candidate;
+                }
+            }
+            if (alignment == null) {
+                alignment = AlignmentInterval.getFeatureContaining(alignments, position - 1);
+                if (alignment == null) {
+                    alignment = AlignmentInterval.getFeatureContaining(alignments, position + 1);
+                }
+            }
+        }
+        return alignment;
+    }
+
+    private static Integer getBaseModificationLikelihood(Alignment alignment, int position, String modification) {
+
+        int[] modifiedPositions = getBaseModificationSortPositions(alignment, position, modification);
+        if (modifiedPositions.length == 0) {
+            return null;
+        }
+
+        List<BaseModificationSet> baseModificationSets = alignment.getBaseModificationSets();
+        if (baseModificationSets == null) {
+            return null;
+        }
+
+        Integer maxLikelihood = null;
+        for (BaseModificationSet bmSet : baseModificationSets) {
+            if (modification != null && !modification.equals(bmSet.getModification())) {
+                continue;
+            }
+
+            for (int modifiedPosition : modifiedPositions) {
+                Integer readIndex = getReadIndex(alignment, modifiedPosition);
+                if (readIndex != null && bmSet.containsPosition(readIndex)) {
+                    int likelihood = Byte.toUnsignedInt(bmSet.getLikelihoods().get(readIndex));
+                    maxLikelihood = maxLikelihood == null ? likelihood : Math.max(maxLikelihood, likelihood);
+                }
+            }
+        }
+        return maxLikelihood;
+    }
+
+    private static int[] getBaseModificationSortPositions(Alignment alignment, int position, String modification) {
+        if (!"m".equals(modification)) {
+            return new int[]{position};
+        }
+
+        byte previousBase = uppercase(alignment.getBase(position - 1));
+        byte base = uppercase(alignment.getBase(position));
+        byte nextBase = uppercase(alignment.getBase(position + 1));
+        if ((base == 'C' && nextBase == 'G') || (base == 0 && nextBase == 'G')) {
+            return new int[]{position, position + 1};
+        } else if ((base == 'G' && previousBase == 'C') || (base == 0 && previousBase == 'C')) {
+            return new int[]{position - 1, position};
+        } else {
+            return new int[0];
+        }
+    }
+
+    private static byte uppercase(byte base) {
+        return base >= 'a' && base <= 'z' ? (byte) (base - 32) : base;
+    }
+
+    private static Integer getReadIndex(Alignment alignment, int position) {
+        for (AlignmentBlock block : alignment.getAlignmentBlocks()) {
+            int offset = position - block.getStart();
+            if (offset >= 0 && offset < block.getBasesLength()) {
+                return block.getBasesOffset() + offset;
+            }
+        }
+        return null;
+    }
 
     /**
      * Custom valueOf method with backward compatibility.

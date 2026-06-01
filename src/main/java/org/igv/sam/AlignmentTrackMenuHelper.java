@@ -117,7 +117,7 @@ class AlignmentTrackMenuHelper {
         // Group, sort, color, shade, and pack
         addSeparator();
         addGroupMenuItem(e);
-        addSortMenuItem();
+        addSortMenuItem(e, clickedAlignment);
         addColorByMenuItem();
         addShadeAlignmentsMenuItem();
         //addFilterMenuItem();
@@ -656,7 +656,7 @@ class AlignmentTrackMenuHelper {
     /**
      * Sort menu
      */
-    void addSortMenuItem() {
+    void addSortMenuItem(final TrackClickEvent e, Alignment clickedAlignment) {
 
         JMenu sortMenu = new JMenu("Sort alignments by");
         ButtonGroup group = new ButtonGroup();
@@ -682,6 +682,9 @@ class AlignmentTrackMenuHelper {
         mappings.put("none", SortOption.NONE);
 
         SortOption currentSortOption = renderOptions.getSortOption();
+        boolean hasMethylation = clickedAlignment != null && dataManager.getAllBaseModificationKeys().stream()
+                .anyMatch(key -> "m".equals(key.getModification()));
+        final double clickedPosition = e.getChromosomePosition();
 
         for (Map.Entry<String, SortOption> el : mappings.entrySet()) {
             JCheckBoxMenuItem mi = new JCheckBoxMenuItem(el.getKey());
@@ -693,6 +696,18 @@ class AlignmentTrackMenuHelper {
             });
             sortMenu.add(mi);
             group.add(mi);
+
+            if (el.getValue() == SortOption.BASE && hasMethylation) {
+                JCheckBoxMenuItem methylationItem = new JCheckBoxMenuItem("CpG methylation (5mC) at clicked position");
+                methylationItem.setSelected(currentSortOption == SortOption.BASE_MODIFICATION && "m".equals(renderOptions.getSortByTag()));
+                methylationItem.addActionListener(aEvt -> {
+                    renderOptions.setSortByTag("m");
+                    renderOptions.setSortOption(SortOption.BASE_MODIFICATION);
+                    sortAlignmentTracks(SortOption.BASE_MODIFICATION, "m", renderOptions.isInvertSorting(), clickedPosition);
+                });
+                sortMenu.add(methylationItem);
+                group.add(methylationItem);
+            }
         }
 
         JCheckBoxMenuItem tagOption = new JCheckBoxMenuItem("tag");
@@ -1509,6 +1524,10 @@ class AlignmentTrackMenuHelper {
 
 
     private void sortAlignmentTracks(SortOption option, String tag, boolean invertSort) {
+        sortAlignmentTracks(option, tag, invertSort, null);
+    }
+
+    private void sortAlignmentTracks(SortOption option, String tag, boolean invertSort, Double location) {
 
         Collection<AlignmentTrack> tracksToSort = PreferencesManager.getPreferences().getAsBoolean(SAM_SORT_ALL) ?
                 IGV.getInstance().getAlignmentTracks() :
@@ -1518,7 +1537,11 @@ class AlignmentTrackMenuHelper {
             track.renderOptions.setSortOption(option);
             track.renderOptions.setSortByTag(tag);
             track.renderOptions.setInvertSorting(invertSort);
-            track.sortRows(option, tag, invertSort);
+            if (location == null) {
+                track.sortRows(option, tag, invertSort);
+            } else {
+                track.sortRows(option, tag, invertSort, location);
+            }
         }
 
         IGV.getInstance().repaint(tracksToSort);
@@ -1555,5 +1578,3 @@ class AlignmentTrackMenuHelper {
     }
 
 }
-
-
