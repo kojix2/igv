@@ -95,7 +95,6 @@ public class OAuthUtils {
     public OAuthProvider getGoogleProvider() {
         if (googleProvider == null) {
             try {
-                log.info("Loading Google oAuth properties");
                 googleProvider = loadDefaultOauthProperties();
                 if (googleProvider != null && IGVMenuBar.getInstance() != null) {
                     IGVMenuBar.getInstance().enableGoogleMenu(true);
