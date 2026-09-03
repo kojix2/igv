@@ -93,6 +93,9 @@ public class JsonGenomeLoader extends GenomeLoader {
                 if (trackConfig.indexURL != null) {
                     trackConfig.indexURL = (FileUtils.getAbsolutePath(trackConfig.indexURL, genomePath));
                 }
+                if (trackConfig.trixURL != null) {
+                    trackConfig.trixURL = (FileUtils.getAbsolutePath(trackConfig.trixURL, genomePath));
+                }
             });
         }
         return config;

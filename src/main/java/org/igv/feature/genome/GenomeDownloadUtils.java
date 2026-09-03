@@ -8,6 +8,7 @@ import org.igv.logging.Logger;
 import org.igv.ui.IGV;
 import org.igv.ui.util.download.Downloader;
 import org.igv.util.FileUtils;
+import org.igv.util.HttpUtils;
 import org.json.JSONObject;
 
 import java.io.BufferedWriter;
@@ -120,15 +121,14 @@ public class GenomeDownloadUtils {
             File dataDirectory,
             String relativeDataDirectory,
             boolean useLocalCache) {
-        URL url;
-        File localFile = null;
         for (String f : fields) {
             try {
                 Field field = config.getClass().getDeclaredField(f);
                 field.setAccessible(true);
                 Object urlField = field.get(config);
                 if (urlField != null) {
-                    url = new URL(urlField.toString());
+                    File localFile = null;
+                    URL url = new URL(urlField.toString());
                     if (downloadData) {
                         localFile = download(url, dataDirectory);
                     } else if (useLocalCache) {
@@ -137,10 +137,35 @@ public class GenomeDownloadUtils {
                     if (localFile != null && localFile.exists()) {
                         field.set(config, relativeDataDirectory + localFile.getName());
                     }
+                    if (downloadData && "trixURL".equals(f)) {
+                        downloadTrixIndex(urlField.toString(), dataDirectory);
+                    }
                 }
             } catch (Exception e) {
                 log.error(e);
             }
+        }
+    }
+
+    /**
+     * Attempt to download the secondary index ("ixx") file associated with a trix ("ix") file.  The ixx file is not
+     * referenced in the genome configuration, its location is inferred by convention -- replace the "ix" extension
+     * with "ixx".  Since this is a guess, failure to find the file is not an error.
+     *
+     * @param trixURL       URL of the trix (".ix") file
+     * @param dataDirectory directory the trix file was downloaded to
+     */
+    private static void downloadTrixIndex(String trixURL, File dataDirectory) {
+        if (!trixURL.endsWith(".ix")) {
+            return;
+        }
+        String ixxURL = trixURL + "x";
+        try {
+            if (HttpUtils.getInstance().resourceAvailable(ixxURL)) {
+                download(new URL(ixxURL), dataDirectory);
+            }
+        } catch (Exception e) {
+            log.warn("Error downloading trix index " + ixxURL, e);
         }
     }
 
