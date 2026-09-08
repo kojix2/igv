@@ -95,6 +95,12 @@ public class BBFile {
 
 
     static public final int BBFILE_HEADER_SIZE = 64;
+
+    /**
+     * Upper bound on the buffered header read.  Bounds how far past the fixed header section we are willing to read
+     * to pick up the "dataCount" field -- see readHeader.
+     */
+    static public final int MAX_HEADER_BUFFER_SIZE = 64 * 1024;
     static public final long BIGWIG_MAGIC = 2291137574l; // BigWig Magic
     static public final long BIGBED_MAGIC = 2273964779l; // BigBed Magic
     static public final int BBFILE_EXTENDED_HEADER_HEADER_SIZE = 64;
@@ -237,6 +243,18 @@ public class BBFile {
                 header.totalSummaryOffset - BBFILE_HEADER_SIZE + 40 :
                 Math.min(header.fullDataOffset, header.chromTreeOffset) - BBFILE_HEADER_SIZE);
 
+        // The 4 byte "dataCount" field lives at fullDataOffset, which follows the chromosome tree.  That tree can be
+        // very large -- 100s of MB for assemblies with many scaffolds -- so only extend this read to cover dataCount
+        // when it is close enough that the extra bytes cost less than a second request.  Otherwise it is fetched
+        // separately below.
+        long dataCountEnd = header.fullDataOffset + 4;
+        boolean dataCountBuffered = type == Type.BIGBED &&
+                header.fullDataOffset >= BBFILE_HEADER_SIZE &&
+                dataCountEnd - BBFILE_HEADER_SIZE <= MAX_HEADER_BUFFER_SIZE;
+        if (dataCountBuffered) {
+            size = Math.max(size, (int) (dataCountEnd - BBFILE_HEADER_SIZE));
+        }
+
         buffer = loadBinaryBuffer(this.path, order, BBFILE_HEADER_SIZE, size);
 
         // Zoom headers -- immediately follows the common header
@@ -270,7 +288,11 @@ public class BBFile {
 
         if (type == Type.BIGBED) {
             //Total data count -- for bigbed this is the number of features, for bigwig it is number of sections
-            buffer = loadBinaryBuffer(this.path, order, header.fullDataOffset, 4);
+            if (dataCountBuffered) {
+                buffer.position((int) (header.fullDataOffset - startOffset));
+            } else {
+                buffer = loadBinaryBuffer(this.path, order, header.fullDataOffset, 4);
+            }
             header.dataCount = buffer.getUInt();
             this.featureDensity = ((double) header.dataCount) / this.chromTree.estimateGenomeSize();
 

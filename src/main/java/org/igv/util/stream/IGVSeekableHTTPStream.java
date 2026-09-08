@@ -92,7 +92,7 @@ public class IGVSeekableHTTPStream extends SeekableStream {
             long endRange = position + len - 1;
             // IF we know the total content length, limit the end range to that.
             if (contentLength > 0) {
-                endRange = Math.min(endRange, contentLength);
+                endRange = Math.min(endRange, contentLength - 1);   // Range end is inclusive
             }
             if (log.isTraceEnabled()) {
                 log.trace("Trying to read range " + position + " to " + endRange);
@@ -187,6 +187,9 @@ public class IGVSeekableHTTPStream extends SeekableStream {
 
         try {
             InputStream input = conn.getInputStream();
+            if (contentLength < 0) {
+                setContentLength(conn);
+            }
             return input;
         } catch (IOException e) {
             HttpUtils.getInstance().readErrorStream(conn);  // Consume content
@@ -194,6 +197,31 @@ public class IGVSeekableHTTPStream extends SeekableStream {
         }
     }
 
+
+    /**
+     * Record the total content length from the "Content-Range" header of a partial response.  This is free -- the
+     * value comes back with data we are fetching anyway -- and so avoids a separate HEAD request.  Knowing the length
+     * lets buffered reads clamp to the end of the file rather than discovering EOF with a wasted 416.
+     * <p>
+     * A server that does not honor the range request returns 200 with no "Content-Range", in which case the length
+     * is left unset.
+     *
+     * @param conn a connection whose response headers have been read
+     */
+    private void setContentLength(HttpURLConnection conn) {
+        // "Content-Range: bytes <start>-<end>/<total>", where total is "*" if the server does not know it
+        String contentRange = conn.getHeaderField("Content-Range");
+        if (contentRange != null) {
+            int idx = contentRange.lastIndexOf('/');
+            if (idx > 0) {
+                try {
+                    contentLength = Long.parseLong(contentRange.substring(idx + 1).trim());
+                } catch (NumberFormatException e) {
+                    log.debug("Unparseable Content-Range: " + contentRange);
+                }
+            }
+        }
+    }
 
     /**
      * Add query parameters which should more properly be in Range header field

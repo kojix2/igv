@@ -1,8 +1,11 @@
 package org.igv.ucsc.bb;
 
 
+import htsjdk.samtools.seekablestream.SeekableStream;
 import org.igv.ucsc.twobit.UnsignedByteBuffer;
 import org.igv.ucsc.twobit.UnsignedByteBufferImpl;
+import org.igv.util.FileUtils;
+import org.igv.util.stream.IGVSeekableStreamFactory;
 
 import java.io.IOException;
 import java.nio.ByteOrder;
@@ -20,9 +23,21 @@ public class RPTree {
 
     ByteOrder byteOrder = ByteOrder.LITTLE_ENDIAN;
 
+    /**
+     * Buffer size for the stream wrapping remote files.  Node traversal reads a 4 byte node header followed by the
+     * node body; buffering pulls the body, and usually several sibling nodes, in with the header read.
+     */
+    static int BUFFER_SIZE = 64 * 1024;
+
     Map<Long, Node> nodeCache = new HashMap<>();
     long startOffset;
     String path;
+
+    /**
+     * Buffered stream for remote files, null for local files.  Local files are read through the path, opening and
+     * closing a stream per read, to avoid holding a file descriptor for the life of the enclosing BBFile.
+     */
+    private SeekableStream stream;
     private Header header;
     private long rootNodeOffset;
 
@@ -31,17 +46,27 @@ public class RPTree {
         tree.init();
         return tree;
     }
-    private RPTree(String path, long startOffset) {
+    private RPTree(String path, long startOffset) throws IOException {
         this.path = path;
         this.startOffset = startOffset;
+        if (FileUtils.isRemote(path)) {
+            this.stream = IGVSeekableStreamFactory.getInstance().getBufferedStream(
+                    IGVSeekableStreamFactory.getInstance().getStreamFor(path), BUFFER_SIZE);
+        }
+    }
+
+    UnsignedByteBuffer loadBinaryBuffer(long start, int size) throws IOException {
+        return this.stream != null ?
+                UnsignedByteBufferImpl.getUnsignedByteBuffer(this.stream, this.byteOrder, start, size) :
+                UnsignedByteBufferImpl.loadBinaryBuffer(this.path, this.byteOrder, start, size);
     }
 
     void init() throws IOException {
-        UnsignedByteBuffer binaryParser = UnsignedByteBufferImpl.loadBinaryBuffer(this.path, this.byteOrder, this.startOffset, RPTREE_HEADER_SIZE);
+        UnsignedByteBuffer binaryParser = loadBinaryBuffer(this.startOffset, RPTREE_HEADER_SIZE);
         int magic = binaryParser.getInt();
         if (magic != RPTree.magic) {
             this.byteOrder = ByteOrder.BIG_ENDIAN;
-            binaryParser = UnsignedByteBufferImpl.loadBinaryBuffer(this.path, this.byteOrder, this.startOffset, RPTREE_HEADER_SIZE);
+            binaryParser = loadBinaryBuffer(this.startOffset, RPTREE_HEADER_SIZE);
             magic = binaryParser.getInt();
             if (magic != RPTree.magic) {
                 throw new RuntimeException("Bad magic number " + magic);
@@ -124,20 +149,23 @@ public class RPTree {
         }
     }
 
-    Node readNode(long offset) throws IOException {
+    /**
+     * Synchronized -- the shared stream used for remote files is stateful, and the node cache is not thread safe.
+     */
+    synchronized Node readNode(long offset) throws IOException {
 
         long nodeKey = offset;
         if (this.nodeCache.containsKey(nodeKey)) {
             return this.nodeCache.get(nodeKey);
         }
 
-        UnsignedByteBuffer binaryParser = UnsignedByteBufferImpl.loadBinaryBuffer(this.path, this.byteOrder, offset, 4);
+        UnsignedByteBuffer binaryParser = loadBinaryBuffer(offset, 4);
         byte type = binaryParser.get();
         boolean isLeaf = (type == 1);
         byte reserved = binaryParser.get();
         int count = binaryParser.getUShort();
         int bytesRequired = count * (isLeaf ? RPTREE_NODE_LEAF_ITEM_SIZE : RPTREE_NODE_CHILD_ITEM_SIZE);
-        binaryParser = UnsignedByteBufferImpl.loadBinaryBuffer(this.path, this.byteOrder, offset + 4, bytesRequired);
+        binaryParser = loadBinaryBuffer(offset + 4, bytesRequired);
 
         Item[] items = new Item[count];
         for (int i = 0; i < count; i++) {
