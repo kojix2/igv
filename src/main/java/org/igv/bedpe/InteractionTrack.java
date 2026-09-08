@@ -499,6 +499,14 @@ public class InteractionTrack extends AbstractTrack implements IGVEventObserver 
     }
 
     @Override
+    public void unload() {
+        super.unload();
+        if (featureSource != null) {
+            featureSource.close();
+        }
+    }
+
+    @Override
     public void receiveEvent(IGVEvent event) {
         if (event instanceof FrameManager.ChangeEvent) {
             Set<ReferenceFrame> frames = new HashSet<>(FrameManager.getFrames());

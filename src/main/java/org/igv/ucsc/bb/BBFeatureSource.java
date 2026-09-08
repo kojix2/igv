@@ -57,9 +57,8 @@ public class BBFeatureSource implements FeatureSource {
 
     @Override
     public void close() {
-        // super.dispose();
         if (reader != null) {
-            //     reader.close();
+            reader.close();
         }
     }
 

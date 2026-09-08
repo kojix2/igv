@@ -10,8 +10,9 @@ import org.igv.util.stream.IGVSeekableStreamFactory;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents the ChromTree of a UCSC bigbed/bigwig file.  The entire tree is walked to produce 2 maps,
@@ -31,8 +32,10 @@ public class ChromTree {
 
     private final long startOffset;
     private BPTree bpTree;
-    private HashMap<String, Integer> nameToId = new HashMap<>();
-    private HashMap<Integer, String> idToName = new HashMap<>();
+
+    // Concurrent -- tree lookups can be issued from multiple load threads, one per frame in multi-locus view.
+    private Map<String, Integer> nameToId = new ConcurrentHashMap<>();
+    private Map<Integer, String> idToName = new ConcurrentHashMap<>();
 
     public ChromTree(String file, long startOffset) throws IOException {
 
@@ -96,6 +99,13 @@ public class ChromTree {
 
     public long getItemCount() {
         return this.bpTree.itemCount;
+    }
+
+    /**
+     * Release the stream held for remote files.  Called when the enclosing BBFile is closed.
+     */
+    public void close() {
+        this.bpTree.close();
     }
 
     /**

@@ -155,7 +155,9 @@ public class BBDataSource extends AbstractDataSource implements DataSource {
 
     @Override
     public void dispose() {
-
+        if (reader != null) {
+            reader.close();
+        }
     }
 
 

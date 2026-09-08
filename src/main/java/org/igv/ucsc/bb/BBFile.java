@@ -352,18 +352,28 @@ public class BBFile {
         this.header.extraIndexOffsets = indexOffset;
     }
 
+    /**
+     * Return the R tree for the given offset, loading and caching it if needed.  Synchronized -- tracks are loaded
+     * concurrently, one task per (track, frame) pair (see IGV.repaint), so without this an unguarded get-then-put
+     * could load the same tree twice, opening a redundant stream and discarding one of the caches.
+     */
+    private synchronized RPTree getRPTree(long treeOffset) throws IOException {
+        RPTree rpTree = rTreeCache.get(treeOffset);
+        if (rpTree == null) {
+            rpTree = RPTree.loadTree(this.path, treeOffset);
+            rTreeCache.put(treeOffset, rpTree);
+        }
+        return rpTree;
+    }
+
     List<byte[]> getLeafChunks(int chrIdx1, int bpStart, int chrIdx2, int bpEnd, long treeOffset) throws IOException {
 
         if (this.header == null) {
             this.header = this.readHeader();
         }
 
-        // Load the R Tree and fine leaf items
-        RPTree rpTree = rTreeCache.get(treeOffset);
-        if (rpTree == null) {
-            rpTree = RPTree.loadTree(this.path, treeOffset);
-            rTreeCache.put(treeOffset, rpTree);
-        }
+        // Load the R Tree and find leaf items
+        RPTree rpTree = getRPTree(treeOffset);
 
         List<byte[]> leafChunks = new ArrayList<>();
         List<RPTree.Item> leafItems = rpTree.findLeafItemsOverlapping(chrIdx1, bpStart, chrIdx2, bpEnd);
@@ -701,7 +711,7 @@ public class BBFile {
         return null;
     }
 
-    BPTree[] getSearchTrees() throws IOException {
+    synchronized BPTree[] getSearchTrees() throws IOException {
         if (this._searchTrees == null &&
                 this.header.extraIndexOffsets != null &&
                 this.header.extraIndexOffsets.length > 0) {
@@ -713,6 +723,29 @@ public class BBFile {
             }
         }
         return this._searchTrees;
+    }
+
+    /**
+     * Release the streams held open for remote files.  For a remote file this is one buffered stream for the chromosome
+     * tree plus one for each R tree touched (the full-data index and each zoom-level index used), so the count is not
+     * negligible over a session's worth of tracks.  Called from the track "unload" path; the file is not usable after
+     * this call.
+     */
+    public synchronized void close() {
+        if (this.chromTree != null) {
+            this.chromTree.close();
+        }
+        for (RPTree rpTree : this.rTreeCache.values()) {
+            rpTree.close();
+        }
+        this.rTreeCache.clear();
+        if (this._searchTrees != null) {
+            for (BPTree bpTree : this._searchTrees) {
+                if (bpTree != null) bpTree.close();
+            }
+            this._searchTrees = null;
+        }
+        this._preloadBytes = null;
     }
 
     UnsignedByteBuffer loadBinaryBuffer(String path, ByteOrder order, long start, int size) throws IOException {

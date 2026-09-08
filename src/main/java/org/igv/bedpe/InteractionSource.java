@@ -14,4 +14,10 @@ public interface InteractionSource {
     default List<String> getNormalizationTypes() {
         return null;
     }
+
+    /**
+     * Release any resources held by the source.  Called when the enclosing track is unloaded.
+     */
+    default void close() {
+    }
 }

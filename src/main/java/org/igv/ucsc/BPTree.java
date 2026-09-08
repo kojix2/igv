@@ -43,6 +43,8 @@ package org.igv.ucsc;
 
 
 import htsjdk.samtools.seekablestream.SeekableStream;
+import org.igv.logging.LogManager;
+import org.igv.logging.Logger;
 import org.igv.ucsc.twobit.UnsignedByteBuffer;
 import org.igv.ucsc.twobit.UnsignedByteBufferImpl;
 
@@ -55,6 +57,8 @@ import java.util.function.Function;
  * Created by jrobinso on 6/13/17.
  */
 public class BPTree implements BPIndex {
+
+    private static Logger log = LogManager.getLogger(BPTree.class);
 
     // the number 0x78CA8C91 in the architecture of the machine that created the file
     static int SIGNATURE = 0x78CA8C91;
@@ -105,6 +109,23 @@ public class BPTree implements BPIndex {
                 UnsignedByteBufferImpl.loadBinaryBuffer(this.path, this.byteOrder, start, size);
     }
 
+    /**
+     * Close the backing stream, if any.  Trees constructed from a path read through a stream opened and closed per
+     * read and hold nothing to release.  The tree is not usable after this call.
+     */
+    public synchronized void close() {
+        if (this.stream != null) {
+            try {
+                this.stream.close();
+            } catch (IOException e) {
+                log.error("Error closing B+ tree stream", e);
+            } finally {
+                this.stream = null;
+            }
+        }
+        this.nodeCache.clear();
+    }
+
     private void init() throws IOException {
 
         long filePosition = this.fileOffset;
@@ -113,7 +134,7 @@ public class BPTree implements BPIndex {
         int magicNumber = buffer.getInt();
         if (SIGNATURE != magicNumber) {
             this.byteOrder = ByteOrder.BIG_ENDIAN;
-            buffer = loadBinaryBuffer(0, 64);  // Reload for new byte order
+            buffer = loadBinaryBuffer(filePosition, 64);  // Reload for new byte order
             magicNumber = buffer.getInt();
             if (SIGNATURE != magicNumber) {
                 throw new RuntimeException("Unexpected magic number");
@@ -167,7 +188,11 @@ public class BPTree implements BPIndex {
         }
     }
 
-    public Node readTreeNode(long offset) throws IOException {
+    /**
+     * Synchronized -- when constructed from a stream that stream is shared and stateful, and the node cache is not
+     * thread safe.  Tree searches can be issued concurrently, e.g. one per frame in multi-locus view.
+     */
+    public synchronized Node readTreeNode(long offset) throws IOException {
 
         if (this.nodeCache.containsKey(offset)) {
             return this.nodeCache.get(offset);

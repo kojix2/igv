@@ -48,6 +48,14 @@ public class DataSourceTrack extends DataTrack {
         }
     }
 
+    @Override
+    public void unload() {
+        super.unload();
+        if (dataSource != null) {
+            dataSource.dispose();
+        }
+    }
+
     void initScale(DataSource dataSource, List<LocusScore> scores) {
 
         float min = (float) dataSource.getDataMin();

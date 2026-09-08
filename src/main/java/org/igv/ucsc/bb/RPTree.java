@@ -2,6 +2,8 @@ package org.igv.ucsc.bb;
 
 
 import htsjdk.samtools.seekablestream.SeekableStream;
+import org.igv.logging.LogManager;
+import org.igv.logging.Logger;
 import org.igv.ucsc.twobit.UnsignedByteBuffer;
 import org.igv.ucsc.twobit.UnsignedByteBufferImpl;
 import org.igv.util.FileUtils;
@@ -15,6 +17,9 @@ import java.util.List;
 import java.util.Map;
 
 public class RPTree {
+
+    private static Logger log = LogManager.getLogger(RPTree.class);
+
     static int RPTREE_HEADER_SIZE = 48;
     static int RPTREE_NODE_LEAF_ITEM_SIZE = 32; // leaf item size
     static int RPTREE_NODE_CHILD_ITEM_SIZE = 24; // child item size
@@ -123,6 +128,23 @@ public class RPTree {
                     }
                 }
             }
+    }
+
+    /**
+     * Close the buffered stream, if any.  Called when the enclosing BBFile is closed.  The tree is not usable
+     * afterwards.
+     */
+    synchronized void close() {
+        if (this.stream != null) {
+            try {
+                this.stream.close();
+            } catch (IOException e) {
+                log.error("Error closing R-tree stream for " + this.path, e);
+            } finally {
+                this.stream = null;
+            }
+        }
+        this.nodeCache.clear();
     }
 
     static class Header {

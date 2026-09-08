@@ -18,6 +18,13 @@ public class WrappedInteractionSource implements InteractionSource {
     }
 
     @Override
+    public void close() {
+        if (featureSource != null) {
+            featureSource.close();
+        }
+    }
+
+    @Override
     public List<BedPE> getFeatures(String chr, int start, int end, double bpPerPixel, String normalization, int maxFeatureCount) throws IOException {
         Iterator<BedPE> featureIterator = featureSource.getFeatures(chr, start, end);
         List<BedPE> reservoir = new ArrayList<>();
