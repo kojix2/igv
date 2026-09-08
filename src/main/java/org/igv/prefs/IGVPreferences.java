@@ -248,6 +248,7 @@ public class IGVPreferences {
                 userPreferences.put(key, value);
             }
             updateCaches(key, value);
+            checkForTrackBorderChange(key);
             IGVEventBus.getInstance().post(new PreferencesChangeEvent());
         }
     }
@@ -270,6 +271,7 @@ public class IGVPreferences {
         checkForAlignmentChanges(updatedPrefs);
         checkForCommandListenerChanges(updatedPrefs);
         checkForAttributePanelChanges(updatedPrefs);
+        checkForTrackBorderChanges(updatedPrefs);
         checkForGoogleMenuChange(updatedPrefs);
         checkForRestartChanges(updatedPrefs);
         IGVEventBus.getInstance().post(new PreferencesChangeEvent());
@@ -360,6 +362,25 @@ public class IGVPreferences {
             if (getAsBoolean(PORT_ENABLED)) {
                 CommandListener.start(getAsInt(PORT_NUMBER));
             }
+        }
+    }
+
+    private void checkForTrackBorderChanges(Map<String, String> updatedPreferenceMap) {
+        for (String key : TRACK_BORDER_KEYS) {
+            if (updatedPreferenceMap.containsKey(key)) {
+                checkForTrackBorderChange(key);
+                return;
+            }
+        }
+    }
+
+    /**
+     * The track borders are drawn by the dividers between track panels, so a change in any of the
+     * border preferences requires a re-layout, not just a repaint.
+     */
+    private void checkForTrackBorderChange(String key) {
+        if (TRACK_BORDER_KEYS.contains(key) && IGV.hasInstance()) {
+            IGV.getInstance().revalidateTrackPanels();
         }
     }
 
@@ -617,6 +638,7 @@ public class IGVPreferences {
         updatedPrefs.put(key, value);
         checkForAlignmentChanges(updatedPrefs);
         clearCaches();
+        checkForTrackBorderChange(key);
     }
 
     public void setShowAttributeView(boolean isShowable) {
@@ -924,12 +946,8 @@ public class IGVPreferences {
      */
     private void migrateUserPreferences() {
 
-        if (!userPreferences.containsKey(TRACK_DRAW_BORDERS) &&
-                ("TRUE".equalsIgnoreCase(userPreferences.get(CHART_DRAW_TOP_BORDER)) ||
-                        "TRUE".equalsIgnoreCase(userPreferences.get(CHART_DRAW_BOTTOM_BORDER)))) {
-            userPreferences.put(TRACK_DRAW_BORDERS, "TRUE");
-        }
-
+        // Borders between tracks are no longer optional -- see TrackPanelDivider -- so these are dropped.
+        userPreferences.remove(TRACK_DRAW_BORDERS);
         userPreferences.remove(CHART_DRAW_TOP_BORDER);
         userPreferences.remove(CHART_DRAW_BOTTOM_BORDER);
     }

@@ -2,6 +2,7 @@ package org.igv.ui.panel;
 
 import org.igv.Globals;
 import org.igv.prefs.Constants;
+import org.igv.prefs.IGVPreferences;
 import org.igv.prefs.PreferencesManager;
 import org.igv.track.Track;
 import org.igv.ui.IGV;
@@ -31,10 +32,54 @@ import java.util.List;
  * If the immediate pane above this divider is invisible (preferred height&nbsp;≤&nbsp;0),
  * the divider walks upward through siblings to find the nearest visible pane. If no
  * visible pane exists above, the divider hides itself.
+ * <p>
+ * The divider doubles as the visible border between tracks, so its height and color come from
+ * the {@link Constants#TRACK_BORDER_WIDTH} and {@link Constants#TRACK_BORDER_COLOR} preferences.
+ * The border is normally only a pixel or two tall, far too small to aim at, so the area the
+ * divider answers mouse events for is independent of the area it paints: {@link #contains}
+ * extends {@link #GRAB_MARGIN} pixels above and below the painted border. The track above yields
+ * its bottom edge to make room (see {@link TrackPanelScrollPane#contains}); the track below is
+ * checked after this divider and so needs no cooperation.
  */
 public class TrackPanelDivider extends JPanel {
 
-    public static final int DIVIDER_HEIGHT = 5;
+    /**
+     * Number of pixels above and below the painted border that still count as part of the
+     * divider for mouse purposes, so the drag handle stays usable at any border width.
+     */
+    public static final int GRAB_MARGIN = 3;
+
+    /**
+     * The border is always drawn.  A zero-height divider would leave nothing to grab, and the
+     * grab margins of adjacent dividers would run together, so one pixel is the minimum.
+     */
+    private static final int MIN_BORDER_WIDTH = 1;
+
+    /**
+     * Fallback colors used when {@link Constants#TRACK_BORDER_COLOR} has not been set explicitly.
+     * The preference default (240,240,240) is tuned for the light theme, so in dark mode an
+     * equally subtle dark value is substituted unless the user has chosen a color.
+     */
+    private static final Color DEFAULT_DARK_COLOR = new Color(60, 60, 60);
+
+    /**
+     * Height of the border drawn between track panels, from user preferences.
+     */
+    public static int getDividerHeight() {
+        IGVPreferences prefs = PreferencesManager.getPreferences();
+        return Math.max(MIN_BORDER_WIDTH, prefs.getAsInt(Constants.TRACK_BORDER_WIDTH));
+    }
+
+    /**
+     * Color of the gap between track panels, from user preferences.
+     */
+    public static Color getDividerColor() {
+        IGVPreferences prefs = PreferencesManager.getPreferences();
+        if (Globals.isDarkMode() && !prefs.hasExplicitValue(Constants.TRACK_BORDER_COLOR)) {
+            return DEFAULT_DARK_COLOR;
+        }
+        return prefs.getAsColor(Constants.TRACK_BORDER_COLOR);
+    }
 
     /**
      * The immediate pane above this divider.
@@ -52,9 +97,7 @@ public class TrackPanelDivider extends JPanel {
         this.abovePane = abovePane;
 
         setCursor(Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR));
-        setBackground(Globals.isDarkMode() ?
-                new Color(200, 200, 200) :
-                new Color(230, 230, 230));
+        setOpaque(false);   // Painted explicitly in paintComponent, color is preference driven
 
         MouseAdapter mouseAdapter = new MouseAdapter() {
             @Override
@@ -165,16 +208,6 @@ public class TrackPanelDivider extends JPanel {
     }
 
     /**
-     * Returns the width of the name panel region, or 0 if unavailable.
-     */
-    private int getNamePanelWidth() {
-        if (IGV.hasInstance()) {
-            return IGV.getInstance().getMainPanel().getNamePanelWidth();
-        }
-        return 0;
-    }
-
-    /**
      * Returns the nearest visible (preferred height &gt; 0) TrackPanelScrollPane
      * above this divider, walking upward through siblings if the immediate pane
      * above has zero height. Returns {@code null} if no visible pane is found.
@@ -243,22 +276,36 @@ public class TrackPanelDivider extends JPanel {
         return isPaneVisible(abovePane);
     }
 
+    /**
+     * Extends the divider's mouse-event area {@link #GRAB_MARGIN} pixels beyond the border it
+     * paints, so the drag handle can be grabbed however thin the border is. Swing resolves both
+     * the event target and the cursor through this method, so the resize cursor appears over the
+     * whole band. Painting is unaffected — it is clipped to the component bounds.
+     */
+    @Override
+    public boolean contains(int x, int y) {
+        if (!shouldBeVisible()) return false;
+        return x >= 0 && x < getWidth() &&
+                y >= -GRAB_MARGIN && y < getHeight() + GRAB_MARGIN;
+    }
+
     @Override
     public Dimension getPreferredSize() {
-        int h = shouldBeVisible() ? DIVIDER_HEIGHT : 0;
-        return new Dimension(Integer.MAX_VALUE, h);
+        return new Dimension(Integer.MAX_VALUE, height());
     }
 
     @Override
     public Dimension getMinimumSize() {
-        int h = shouldBeVisible() ? DIVIDER_HEIGHT : 0;
-        return new Dimension(0, h);
+        return new Dimension(0, height());
     }
 
     @Override
     public Dimension getMaximumSize() {
-        int h = shouldBeVisible() ? DIVIDER_HEIGHT : 0;
-        return new Dimension(Integer.MAX_VALUE, h);
+        return new Dimension(Integer.MAX_VALUE, height());
+    }
+
+    private int height() {
+        return shouldBeVisible() ? getDividerHeight() : 0;
     }
 
     @Override
@@ -267,18 +314,8 @@ public class TrackPanelDivider extends JPanel {
 
         super.paintComponent(g);
 
-        Graphics2D g2d = (Graphics2D) g.create();
-        int h = getHeight();
-        int centerY = h / 2;
-
-        int npWidth = getNamePanelWidth();
-        int lineWidth = npWidth > 0 ? npWidth : getWidth();
-
-        // Draw a subtle grip line across the name panel region
-        // g2d.setColor(Globals.isDarkMode() ? new Color(120, 120, 120) : new Color(180, 180, 180));
-        // g2d.drawLine(0, centerY, lineWidth, centerY);
-
-        g2d.dispose();
+        g.setColor(getDividerColor());
+        g.fillRect(0, 0, getWidth(), getHeight());
     }
 }
 

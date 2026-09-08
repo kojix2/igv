@@ -125,6 +125,12 @@ public class MainPanel extends JPanel implements Paintable, DropTargetListener {
             for (TrackPanel tp : this.getTrackPanels()) {
                 tp.invalidate();
             }
+            // Dividers size themselves from preferences, so invalidate them as well
+            for (Component c : trackPanelContainer.getComponents()) {
+                if (c instanceof TrackPanelDivider) {
+                    c.invalidate();
+                }
+            }
             this.invalidate(); // this should not be neccessary, but is harmless
             this.validate();
             this.repaint();  // Repaint to update divider lines (horizontal separator + track area vertical dividers)

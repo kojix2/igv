@@ -32,8 +32,8 @@ USER_THEME	Select Theme (Requires Restart)	select SYSTEM|FLATLIGHT|FLATDARK|FLAT
 IGV.chart.track.height	Default numeric track height (pixels)	integer	40
 IGV.track.height	Default feature track height (pixels)	integer	15
 IGV.interact.track.height	Default interaction track height (pixels)	integer	250
-TRACK.DRAW_BORDERS	Draw borders between tracks	boolean	FALSE
-TRACK.BORDER_COLOR	Border color	color	192,192,192
+TRACK.BORDER_WIDTH	Border width (pixels)	integer	2	Height of the border drawn between tracks.  Minimum 1.
+TRACK.BORDER_COLOR	Border color	color	240,240,240
 TRACK_ATTRIBUTE_NAME_KEY	Sample attribute key for track names	string	null
 
 ##Numeric Tracks

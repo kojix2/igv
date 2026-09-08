@@ -109,9 +109,12 @@ final public class Constants {
     public static final String CHART_DRAW_TRACK_NAME = "CHART.DRAW_TRACK_NAME";
     public static final String CHART_COLOR_TRACK_NAME = "CHART.COLOR_TRACK_NAME";
 
-    // Track border and options.  Originally these were for chart tracks only, thus the names.
-    public static final String TRACK_DRAW_BORDERS = "TRACK.DRAW_BORDERS";
+    // Track borders (the gap drawn between tracks).
     public static final String TRACK_BORDER_COLOR = "TRACK.BORDER_COLOR";
+    public static final String TRACK_BORDER_WIDTH = "TRACK.BORDER_WIDTH";
+
+    // Obsolete border preferences, retained only so they can be removed from user preference files.
+    public static final String TRACK_DRAW_BORDERS = "TRACK.DRAW_BORDERS";
     public static final String CHART_DRAW_TOP_BORDER = "CHART.DRAW_TOP_BORDER";
     public static final String CHART_DRAW_BOTTOM_BORDER = "CHART.DRAW_BOTTOM_BORDER";
     public static final String CHART_COLOR_BORDERS = "CHART.COLOR_BORDERS";
@@ -397,6 +400,14 @@ final public class Constants {
             COLOR_G,
             COLOR_N,
             COLOR_T
+    );
+
+    /**
+     * List of keys controlling the borders (gaps) drawn between tracks
+     */
+    static java.util.List<String> TRACK_BORDER_KEYS = Arrays.asList(
+            TRACK_BORDER_WIDTH,
+            TRACK_BORDER_COLOR
     );
 
     /**

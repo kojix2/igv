@@ -94,6 +94,16 @@ public class TrackPanelScrollPane extends JPanel implements Paintable {
         }
     }
 
+    /**
+     * Yields the bottom {@link TrackPanelDivider#GRAB_MARGIN} pixels to the divider below, which
+     * is checked after this pane when Swing resolves a mouse position. Without this the divider
+     * could only be grabbed from below, since the border it paints is only a pixel or two tall.
+     */
+    @Override
+    public boolean contains(int x, int y) {
+        return super.contains(x, y) && y < getHeight() - TrackPanelDivider.GRAB_MARGIN;
+    }
+
     // ---- Layout ----
 
     @Override
