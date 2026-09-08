@@ -150,7 +150,7 @@ processResources {
         timestamp = new Date().format("MM/dd/yyyy hh:mm aa")
     }
 
-    filesMatching('resources/about.properties') {
+    filesMatching('about.properties') {
         filter(ReplaceTokens,
                 tokens: [VERSION  : version, BUILD: buildNumber, DEFAULT_MASTER_RESOURCE_URL: dataServerUrl,
                          TIMESTAMP: timestamp])
