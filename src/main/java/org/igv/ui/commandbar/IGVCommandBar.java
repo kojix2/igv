@@ -202,6 +202,15 @@ public class IGVCommandBar extends javax.swing.JPanel implements IGVEventObserve
         searchByLocus(searchText);
     }
 
+    /**
+     * The tooltip describes the action a click will perform, so it depends on the current state.
+     */
+    private void updateSquishTracksTooltip() {
+        squishTracksButton.setToolTipText(squishTracksButton.isSelected() ?
+                "Expand all tracks" :
+                "Squish all tracks, including tracks loaded later");
+    }
+
     private void roiToggleButtonActionPerformed(java.awt.event.ActionEvent evt) {    // GEN-FIRST:event_roiToggleButtonActionPerformed
         if (roiToggleButton.isSelected()) {
             IGV.getInstance().beginROI(roiToggleButton);
@@ -437,9 +446,11 @@ public class IGVCommandBar extends javax.swing.JPanel implements IGVEventObserve
         squishTracksButton.setMaximumSize(new java.awt.Dimension(32, 32));
         squishTracksButton.setMinimumSize(new java.awt.Dimension(32, 32));
         squishTracksButton.setPreferredSize(new java.awt.Dimension(32, 32));
-        squishTracksButton.setToolTipText("<html>Squish all tracks.<br>When on, tracks with rows (alignments, variants, features, ...) " +
-                "are displayed in squished mode, including tracks loaded later.<br>Individual tracks can be overridden from their popup menus.");
-        squishTracksButton.addActionListener(evt -> IGV.getInstance().setSquishTracks(squishTracksButton.isSelected()));
+        updateSquishTracksTooltip();
+        squishTracksButton.addActionListener(evt -> {
+            IGV.getInstance().setSquishTracks(squishTracksButton.isSelected());
+            updateSquishTracksTooltip();
+        });
         toolPanel.add(squishTracksButton, JideBoxLayout.FIX);
 
         final Icon noTooltipIcon = IconFactory.getInstance().getIcon(IconFactory.IconID.NO_TOOLTIP);

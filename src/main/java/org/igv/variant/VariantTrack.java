@@ -55,8 +55,7 @@ public class VariantTrack extends FeatureTrack implements IGVEventObserver {
     private static final Color BAND2_COLOR = Globals.isDarkMode() ? new Color(200, 200, 200) : Color.white;
 
     private final static int DEFAULT_EXPANDED_GENOTYPE_HEIGHT = 15;
-    private final static int DEFAULT_EXPANDED_VARIANT_HEIGHT = 25;
-    private final static int DEFAULT_SQUISHED_VARIANT_HEIGHT = 6;
+    private final static int VARIANT_BAND_HEIGHT = 25;
     private final static int MAX_FILTER_LINES = 15;
     private final static int WG_TRACK_HEIGHT = 40;
     private final static int DEFAULT_SQUISHED_GENOTYPE_HEIGHT = 4;
@@ -905,7 +904,8 @@ public class VariantTrack extends FeatureTrack implements IGVEventObserver {
      * The height of the top band representing the variant call
      */
     public int getVariantBandHeight() {
-        return getDisplayMode() == DisplayMode.SQUISHED ? DEFAULT_SQUISHED_VARIANT_HEIGHT : DEFAULT_EXPANDED_VARIANT_HEIGHT;
+        // The variant band is not a "row", its height is independent of the display mode
+        return VARIANT_BAND_HEIGHT;
     }
 
     public enum ColorMode {
