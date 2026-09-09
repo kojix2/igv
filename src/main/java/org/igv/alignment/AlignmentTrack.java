@@ -47,7 +47,8 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
 
     private static final Logger log = LogManager.getLogger(AlignmentTrack.class);
 
-    static final int LEGACY_SQUISHED_HEIGHT = 2;
+    static final int DEFAULT_EXPANDED_ROW_HEIGHT = 14;
+    static final int DEFAULT_SQUISHED_ROW_HEIGHT = 2;
 
     // Alignment colors
     static final Color DEFAULT_ALIGNMENT_COLOR = new Color(185, 185, 185); //200, 200, 200);
@@ -271,7 +272,6 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
     private boolean removed = false;
     private boolean showGroupLine;
     private int collapsedHeight = 9;
-    private int squishedHeight = 2;
     private final int minHeight = 50;
 
     private Rectangle downsampleRect;
@@ -290,7 +290,9 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
 
         final String baseName = locator.getTrackName();
         this.setName(baseName);
-        this.rowHeight = 14;
+        this.defaultExpandedRowHeight = DEFAULT_EXPANDED_ROW_HEIGHT;
+        this.defaultSquishedRowHeight = DEFAULT_SQUISHED_ROW_HEIGHT;
+        this.rowHeight = DEFAULT_EXPANDED_ROW_HEIGHT;
         this.dataManager = dataManager;
         this.genome = genome;
         this.renderer = new AlignmentRenderer(this);
@@ -461,12 +463,6 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
         // Transitioning to or from FULL requires repacking
         boolean repack = (getDisplayMode() == DisplayMode.FULL || mode == DisplayMode.FULL);
 
-        // Legacy "squished" mode -- an expanded mode with reduced row height
-        if(mode == DisplayMode.SQUISHED) {
-            setRowHeight(LEGACY_SQUISHED_HEIGHT);
-            mode = DisplayMode.EXPANDED;
-        }
-
         super.setDisplayMode(mode);
         if (repack) {
             packAlignments();
@@ -486,14 +482,12 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
 
     @Override
     public int getRowHeight() {
-        final DisplayMode displayMode = getDisplayMode();
-        if (displayMode == DisplayMode.EXPANDED || displayMode == DisplayMode.FULL) {
-            return rowHeight;
-        } else if (displayMode == DisplayMode.COLLAPSED) {
-            return collapsedHeight;
-        } else {
-            return squishedHeight;
-        }
+        return getDisplayMode() == DisplayMode.COLLAPSED ? collapsedHeight : rowHeight;
+    }
+
+    @Override
+    public boolean hasRows() {
+        return true;
     }
 
     @Override
@@ -729,14 +723,7 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
 
         // Divide rectangle into equal height levels
         double y = inputRect.getY() - 3;
-        int intH;
-        if (getDisplayMode() == DisplayMode.EXPANDED) {
-            intH = Math.max(1, rowHeight);
-        } else if (getDisplayMode() == DisplayMode.COLLAPSED) {
-            intH = collapsedHeight;
-        } else {
-            intH = squishedHeight;
-        }
+        int intH = getDisplayMode() == DisplayMode.COLLAPSED ? collapsedHeight : Math.max(1, rowHeight);
 
         for (Map.Entry<String, List<Row>> entry : groups.entrySet()) {
             // Loop through the alignment rows for this group
@@ -1038,8 +1025,8 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
                 renderOptions.setGroupByTag("HP");
             }
             showGroupLine = false;
-            setRowHeight(2);
             setDisplayMode(DisplayMode.EXPANDED);
+            setRowHeight(2);   // Must follow setDisplayMode, which resets the row height
         }
         dataManager.packAlignments(renderOptions, getDisplayMode());
         repaint();

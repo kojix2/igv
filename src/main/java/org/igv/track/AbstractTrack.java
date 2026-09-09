@@ -68,6 +68,11 @@ public abstract class AbstractTrack implements Track {
 
     private int top;
     protected int rowHeight;
+
+    // Row heights applied when a track with rows is set to the SQUISHED or EXPANDED display mode.  Track types with
+    // rows set these in their constructors.  The current row height can still be overridden explicitly by the user.
+    protected int defaultSquishedRowHeight = 1;
+    protected int defaultExpandedRowHeight = DEFAULT_HEIGHT;
     protected int minimumHeight = 20;
     private DataType dataType = DataType.OTHER;
     private boolean selected = false;
@@ -444,6 +449,16 @@ public abstract class AbstractTrack implements Track {
     }
 
     @Override
+    public int getDefaultSquishedRowHeight() {
+        return defaultSquishedRowHeight;
+    }
+
+    @Override
+    public int getDefaultExpandedRowHeight() {
+        return defaultExpandedRowHeight;
+    }
+
+    @Override
     public void setDataType(DataType type) {
         this.dataType = type;
     }
@@ -801,8 +816,20 @@ public abstract class AbstractTrack implements Track {
         return displayMode;
     }
 
+    /**
+     * Set the display mode.  For tracks with rows the SQUISHED and EXPANDED modes reset the row height to the
+     * corresponding default.  COLLAPSED tracks draw a single row at the expanded height.  FULL (alignments only)
+     * leaves the current row height unchanged.
+     */
     public void setDisplayMode(DisplayMode mode) {
         this.displayMode = mode;
+        if (hasRows()) {
+            if (mode == DisplayMode.SQUISHED) {
+                this.rowHeight = defaultSquishedRowHeight;
+            } else if (mode == DisplayMode.EXPANDED || mode == DisplayMode.COLLAPSED) {
+                this.rowHeight = defaultExpandedRowHeight;
+            }
+        }
     }
 
 
@@ -1087,7 +1114,7 @@ public abstract class AbstractTrack implements Track {
 
         if (element.hasAttribute("displayMode")) {
             try {
-                this.displayMode = DisplayMode.valueOf(element.getAttribute("displayMode"));
+                setDisplayMode(DisplayMode.valueOf(element.getAttribute("displayMode")));
             } catch (IllegalArgumentException e) {
                 log.error("Unrecognized displayMode: " + element.getAttribute("displayMode"));
                 this.displayMode = DisplayMode.COLLAPSED;
@@ -1329,7 +1356,7 @@ public abstract class AbstractTrack implements Track {
 
         if (jsonObject.has("displayMode")) {
             try {
-                this.displayMode = DisplayMode.valueOf(jsonObject.getString("displayMode"));
+                setDisplayMode(DisplayMode.valueOf(jsonObject.getString("displayMode")));
             } catch (IllegalArgumentException e) {
                 log.error("Unrecognized displayMode: " + jsonObject.getString("displayMode"));
                 this.displayMode = DisplayMode.COLLAPSED;

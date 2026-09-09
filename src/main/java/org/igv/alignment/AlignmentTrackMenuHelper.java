@@ -88,6 +88,7 @@ class AlignmentTrackMenuHelper {
         this.renderOptions = alignmentTrack.getRenderOptions();
         final Alignment clickedAlignment = alignmentTrack.getAlignmentAt(e);
 
+        items.addAll(TrackMenuUtils.getSquishExpandItems(Collections.singletonList(alignmentTrack)));
         items.add(TrackMenuUtils.getRowHeightItem(Collections.singletonList(alignmentTrack)));
         items.add(TrackMenuUtils.getMinimizeHeightItem(Collections.singletonList(alignmentTrack)));
 

@@ -228,6 +228,29 @@ public interface Track {
     void setRowHeight(int rowHeight);
 
     /**
+     * Return true if this track is composed of rows (feature, alignment, variant, and segmented data tracks).
+     * Tracks with rows respond to the SQUISHED and EXPANDED display modes by resetting their row height to the
+     * corresponding default.
+     */
+    default boolean hasRows() {
+        return false;
+    }
+
+    /**
+     * Row height applied when a track with rows is set to the SQUISHED display mode.
+     */
+    default int getDefaultSquishedRowHeight() {
+        return 1;
+    }
+
+    /**
+     * Row height applied when a track with rows is set to the EXPANDED display mode.
+     */
+    default int getDefaultExpandedRowHeight() {
+        return AbstractTrack.DEFAULT_HEIGHT;
+    }
+
+    /**
      * Shrink the track to its minimum useful height. Default implementation sets row height to 1 and the
      * track height to its minimum height. Subclasses may override to use a different minimum row height,
      * or to size based on content. Only shrinks; never grows the current track height.

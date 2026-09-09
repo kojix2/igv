@@ -59,13 +59,12 @@ public class VariantTrack extends FeatureTrack implements IGVEventObserver {
     private final static int DEFAULT_SQUISHED_VARIANT_HEIGHT = 6;
     private final static int MAX_FILTER_LINES = 15;
     private final static int WG_TRACK_HEIGHT = 40;
-    private final int DEFAULT_SQUISHED_HEIGHT = 4;
+    private final static int DEFAULT_SQUISHED_GENOTYPE_HEIGHT = 4;
 
 
     // TODO -- this needs to be settable
     public static int METHYLATION_MIN_BASE_COUNT = 10;
     private transient Rectangle lastClipBounds;
-    private transient int _squishedHeight;
 
     public static boolean isVCF(String format) {
         return (format.equals("vcf3") ||
@@ -147,12 +146,9 @@ public class VariantTrack extends FeatureTrack implements IGVEventObserver {
 
         this.initSamples(samples);
 
+        this.defaultExpandedRowHeight = DEFAULT_EXPANDED_GENOTYPE_HEIGHT;
+        this.defaultSquishedRowHeight = DEFAULT_SQUISHED_GENOTYPE_HEIGHT;
         setDisplayMode(DisplayMode.EXPANDED);
-
-        int sampleCount = samples.size();
-        final int groupCount = getSampleGroups().size();
-        final int margins = (groupCount - 1) * 3;
-        rowHeight = DEFAULT_EXPANDED_GENOTYPE_HEIGHT;
 
         // Set visibility window.  These values are appropriate for human dbsnp/1kg files, probably conservative otherwise
         // Ugly test on source is to avoid having to add "isIndexed" to a zillion feature source classes.  The intent
@@ -494,6 +490,11 @@ public class VariantTrack extends FeatureTrack implements IGVEventObserver {
     @Override
     public int getNumRows() {
         return sampleCount();
+    }
+
+    @Override
+    public boolean hasRows() {
+        return true;
     }
 
     @Override
@@ -1119,17 +1120,26 @@ public class VariantTrack extends FeatureTrack implements IGVEventObserver {
     }
 
     /**
-     * VariantTrack no longer uses a "display mode" state.  Over the setter to translate.  This should only
-     * be called from unmarshalling sessions
+     * SQUISHED and EXPANDED set the genotype band (row) height.  The legacy COLLAPSED mode is translated to
+     * "hide genotypes".
      *
      * @param mode
      */
     @Override
     public void setDisplayMode(DisplayMode mode) {
-        if (mode == DisplayMode.SQUISHED) {
-            this.rowHeight = this._squishedHeight > 0 ? this._squishedHeight : DEFAULT_SQUISHED_HEIGHT;
-        } else if (mode == DisplayMode.COLLAPSED) {
+        if (mode == DisplayMode.COLLAPSED) {
             this.showGenotypes = false;
+            mode = DisplayMode.EXPANDED;
+        }
+        super.setDisplayMode(mode);
+    }
+
+    /**
+     * Legacy sessions store an explicit "squishedHeight".  Honor it if the track is in squished mode.
+     */
+    private void applyLegacySquishedHeight(int squishedHeight) {
+        if (squishedHeight > 0 && getDisplayMode() == DisplayMode.SQUISHED) {
+            setRowHeight(squishedHeight);
         }
     }
 
@@ -1142,7 +1152,7 @@ public class VariantTrack extends FeatureTrack implements IGVEventObserver {
             this.showGenotypes = Boolean.parseBoolean(element.getAttribute("showGenotypes"));
         }
         if (element.hasAttribute("squishedHeight")) {
-            this._squishedHeight = Integer.parseInt(element.getAttribute("squishedHeight"));
+            applyLegacySquishedHeight(Integer.parseInt(element.getAttribute("squishedHeight")));
         }
         if (element.hasAttribute("genotypeColorMode")) {
             this.genotypeColorMode = ColorMode.valueOf(element.getAttribute("genotypeColorMode"));
@@ -1185,7 +1195,7 @@ public class VariantTrack extends FeatureTrack implements IGVEventObserver {
         }
 
         if (json.has("squishedHeight")) {
-            this._squishedHeight = json.getInt("squishedHeight");
+            applyLegacySquishedHeight(json.getInt("squishedHeight"));
         }
 
         if (json.has("genotypeColorMode")) {

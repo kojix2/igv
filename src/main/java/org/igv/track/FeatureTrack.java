@@ -118,7 +118,7 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
      */
     public FeatureTrack(ResourceLocator locator, String id, String name) {
         super(locator, id, name);
-        this.rowHeight = DEFAULT_EXPANDED_HEIGHT;
+        initRowHeights();
     }
 
     /**
@@ -142,7 +142,7 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
 
         this.source = source;
 
-        this.rowHeight = DEFAULT_EXPANDED_HEIGHT;
+        initRowHeights();
 
         coverageRenderer = new BarChartRenderer();
 
@@ -213,8 +213,19 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
     }
 
     @Override
+    public boolean hasRows() {
+        return true;
+    }
+
+    private void initRowHeights() {
+        this.defaultExpandedRowHeight = DEFAULT_EXPANDED_HEIGHT;
+        this.defaultSquishedRowHeight = DEFAULT_SQUISHED_HEIGHT;
+        this.rowHeight = getDisplayMode() == DisplayMode.SQUISHED ? DEFAULT_SQUISHED_HEIGHT : DEFAULT_EXPANDED_HEIGHT;
+    }
+
+    @Override
     public void minimizeHeight() {
-        setRowHeight(DEFAULT_SQUISHED_HEIGHT);
+        setRowHeight(defaultSquishedRowHeight);
         int newHeight = Math.max(getContentHeight(), getMinimumHeight());
         setHeight(Math.min(newHeight, getHeight()));
     }
@@ -591,12 +602,6 @@ public class FeatureTrack extends AbstractTrack implements IGVEventObserver {
 
     @Override
     public void setDisplayMode(DisplayMode mode) {
-
-        // Deal with the legacy "squished" mode.  This is an expanded mode with a reduced row height
-        if (mode == DisplayMode.SQUISHED) {
-            setRowHeight(DEFAULT_SQUISHED_HEIGHT);
-            mode = DisplayMode.EXPANDED;
-        }
 
         super.setDisplayMode(mode);
 

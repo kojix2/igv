@@ -23,6 +23,7 @@ import org.igv.alignment.AlignmentDataManager;
 import org.igv.alignment.AlignmentTrack;
 import org.igv.alignment.SAMWriter;
 import org.igv.ui.DataRangeDialog;
+import org.igv.variant.VariantTrack;
 import org.igv.ui.FontManager;
 import org.igv.ui.HeatmapScaleDialog;
 import org.igv.ui.IGV;
@@ -93,6 +94,15 @@ public class TrackMenuUtils {
                 }
                 for (Component item : getColorMenuItems(selectedTracks)) {
                     multiMenu.add(item);
+                }
+
+                // Display mode items, applied to the selected tracks that have rows
+                List<Track> rowTracks = selectedTracks.stream().filter(Track::hasRows).toList();
+                if (!rowTracks.isEmpty()) {
+                    multiMenu.addSeparator();
+                    for (Component item : getMultiTrackDisplayModeItems(rowTracks)) {
+                        multiMenu.add(item);
+                    }
                 }
 
                 boolean allDataTracks = selectedTracks.stream()
@@ -891,54 +901,91 @@ public class TrackMenuUtils {
     }
 
     /**
-     * Return a list of display mode radio button menu items.
+     * Return the display mode items for feature tracks:  Collapse / Squish / Expand radio buttons followed by the
+     * row height items.
      */
     public static List<Component> getDisplayModeMenuItems(final Collection<Track> tracks) {
 
-        List<Component> items = new ArrayList<>();
+        Map<String, Track.DisplayMode> modes = new LinkedHashMap<>();
+        modes.put("Collapse", Track.DisplayMode.COLLAPSED);
+        modes.put("Squish", Track.DisplayMode.SQUISHED);
+        modes.put("Expand", Track.DisplayMode.EXPANDED);
+
+        List<Component> items = new ArrayList<>(getDisplayModeRadioItems(tracks, modes));
+        items.add(getRowHeightItem(tracks));
+        items.add(getMinimizeHeightItem(tracks));
+        return items;
+    }
+
+    /**
+     * Return display mode items for a multi-track selection.  {@code rowTracks} should contain only tracks with
+     * rows.  "Collapse" is offered only if every track is a plain feature track, since alignment, variant, and
+     * segmented data tracks do not support a collapsed mode.
+     */
+    public static List<Component> getMultiTrackDisplayModeItems(final Collection<Track> rowTracks) {
+
+        boolean allFeatureTracks = rowTracks.stream()
+                .allMatch(t -> t instanceof FeatureTrack && !(t instanceof VariantTrack));
+
+        Map<String, Track.DisplayMode> modes = new LinkedHashMap<>();
+        if (allFeatureTracks) {
+            modes.put("Collapse", Track.DisplayMode.COLLAPSED);
+        }
+        modes.put("Squish", Track.DisplayMode.SQUISHED);
+        modes.put("Expand", Track.DisplayMode.EXPANDED);
+
+        List<Component> items = new ArrayList<>(getDisplayModeRadioItems(rowTracks, modes));
+        items.add(getRowHeightItem(rowTracks));
+        items.add(getMinimizeHeightItem(rowTracks));
+        return items;
+    }
+
+    /**
+     * Return "Squish" and "Expand" radio button items.  Used by tracks with rows that do not support a
+     * collapsed mode (alignment, variant, and segmented data tracks).
+     */
+    public static List<Component> getSquishExpandItems(final Collection<Track> tracks) {
+        Map<String, Track.DisplayMode> modes = new LinkedHashMap<>();
+        modes.put("Squish", Track.DisplayMode.SQUISHED);
+        modes.put("Expand", Track.DisplayMode.EXPANDED);
+        return getDisplayModeRadioItems(tracks, modes);
+    }
+
+    /**
+     * Return a radio button item for each of the given display modes.  The item matching the most common
+     * current mode among the tracks is selected.
+     */
+    private static List<Component> getDisplayModeRadioItems(final Collection<Track> tracks,
+                                                            final Map<String, Track.DisplayMode> modes) {
 
         // Find "most representative" state from track collection
-        Map<Track.DisplayMode, Integer> counts = new HashMap<Track.DisplayMode, Integer>(Track.DisplayMode.values().length);
-        Track.DisplayMode currentMode = null;
-
+        Map<Track.DisplayMode, Integer> counts = new HashMap<>();
         for (Track t : tracks) {
-            Track.DisplayMode mode = t.getDisplayMode();
-            if (counts.containsKey(mode)) {
-                counts.put(mode, counts.get(mode) + 1);
-            } else {
-                counts.put(mode, 1);
-            }
+            counts.merge(t.getDisplayMode(), 1, Integer::sum);
         }
-
+        Track.DisplayMode currentMode = null;
         int maxCount = -1;
         for (Map.Entry<Track.DisplayMode, Integer> count : counts.entrySet()) {
             if (count.getValue() > maxCount) {
                 currentMode = count.getKey();
                 maxCount = count.getValue();
             }
-
-            ButtonGroup group = new ButtonGroup();
-            Map<String, Track.DisplayMode> modes = new LinkedHashMap<String, Track.DisplayMode>(4);
-            modes.put("Collapse", Track.DisplayMode.COLLAPSED);
-            modes.put("Expand", Track.DisplayMode.EXPANDED);
-
-            for (final Map.Entry<String, Track.DisplayMode> entry : modes.entrySet()) {
-                JRadioButtonMenuItem mm = new JRadioButtonMenuItem(entry.getKey());
-                mm.setSelected(currentMode == entry.getValue());
-                mm.addActionListener(evt -> {
-                    for (Track t : tracks) {
-                        t.setDisplayMode(entry.getValue());
-                    }
-                    IGV.getInstance().repaint(tracks);
-                });
-                group.add(mm);
-                items.add(mm);
-            }
         }
 
-        items.add(getRowHeightItem(tracks));
-        items.add(getMinimizeHeightItem(tracks));
-
+        List<Component> items = new ArrayList<>();
+        ButtonGroup group = new ButtonGroup();
+        for (final Map.Entry<String, Track.DisplayMode> entry : modes.entrySet()) {
+            JRadioButtonMenuItem mm = new JRadioButtonMenuItem(entry.getKey());
+            mm.setSelected(currentMode == entry.getValue());
+            mm.addActionListener(evt -> {
+                for (Track t : tracks) {
+                    t.setDisplayMode(entry.getValue());
+                }
+                IGV.getInstance().repaint(tracks);
+            });
+            group.add(mm);
+            items.add(mm);
+        }
         return items;
     }
 

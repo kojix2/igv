@@ -37,6 +37,7 @@ public class VariantTrackMenuHelper {
         List<Component> items = new ArrayList<>();
 
 
+        items.addAll(TrackMenuUtils.getSquishExpandItems(Collections.singletonList(variantTrack)));
         items.add(TrackMenuUtils.getRowHeightItem(Collections.singletonList(variantTrack)));
         items.add(TrackMenuUtils.getMinimizeHeightItem(Collections.singletonList(variantTrack)));
 

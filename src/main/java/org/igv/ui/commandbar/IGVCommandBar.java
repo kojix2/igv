@@ -57,7 +57,7 @@ public class IGVCommandBar extends javax.swing.JPanel implements IGVEventObserve
 
     private JideButton backButton;
     private JideButton forwardButton;
-    private JideButton minimizeTrackHeightButton;
+    private JideToggleButton squishTracksButton;
 
     private ShowDetailsBehavior detailsBehavior;
 
@@ -427,16 +427,20 @@ public class IGVCommandBar extends javax.swing.JPanel implements IGVEventObserve
         toolPanel.add(roiToggleButton, JideBoxLayout.FIX);
 
 
-        minimizeTrackHeightButton = new JideButton();
-        minimizeTrackHeightButton.setAlignmentX(RIGHT_ALIGNMENT);
-        minimizeTrackHeightButton.setIcon(new javax.swing.ImageIcon(getClass().getResource(
+        squishTracksButton = new JideToggleButton();
+        squishTracksButton.setAlignmentX(RIGHT_ALIGNMENT);
+        // Collapse-all icon while off, expand-all while on (i.e. the action a click will perform)
+        squishTracksButton.setIcon(new javax.swing.ImageIcon(getClass().getResource(
                 darkMode ? "/images/collapseall.invert.gif" : "/images/collapseall.gif")));
-        minimizeTrackHeightButton.setMaximumSize(new java.awt.Dimension(32, 32));
-        minimizeTrackHeightButton.setMinimumSize(new java.awt.Dimension(32, 32));
-        minimizeTrackHeightButton.setPreferredSize(new java.awt.Dimension(32, 32));
-        minimizeTrackHeightButton.setToolTipText("Minimize track heights.");
-        minimizeTrackHeightButton.addActionListener(evt -> IGV.getInstance().minimizeTrackHeights());
-        toolPanel.add(minimizeTrackHeightButton, JideBoxLayout.FIX);
+        squishTracksButton.setSelectedIcon(new javax.swing.ImageIcon(getClass().getResource(
+                darkMode ? "/images/expandall.invert.gif" : "/images/expandall.gif")));
+        squishTracksButton.setMaximumSize(new java.awt.Dimension(32, 32));
+        squishTracksButton.setMinimumSize(new java.awt.Dimension(32, 32));
+        squishTracksButton.setPreferredSize(new java.awt.Dimension(32, 32));
+        squishTracksButton.setToolTipText("<html>Squish all tracks.<br>When on, tracks with rows (alignments, variants, features, ...) " +
+                "are displayed in squished mode, including tracks loaded later.<br>Individual tracks can be overridden from their popup menus.");
+        squishTracksButton.addActionListener(evt -> IGV.getInstance().setSquishTracks(squishTracksButton.isSelected()));
+        toolPanel.add(squishTracksButton, JideBoxLayout.FIX);
 
         final Icon noTooltipIcon = IconFactory.getInstance().getIcon(IconFactory.IconID.NO_TOOLTIP);
         detailsBehaviorButton = new JideButton(noTooltipIcon);

@@ -112,6 +112,10 @@ public class IGV implements IGVEventObserver {
     // Vertical line that follows the mouse
     private boolean rulerEnabled;
 
+    // Global "squish" state, toggled from the command bar.  When on, all tracks with rows are displayed in SQUISHED
+    // mode, including tracks loaded subsequently.  Individual tracks can still be overridden from their popup menus.
+    private boolean squishTracks = false;
+
     public static IGV createInstance(Frame frame, Main.IGVArgs igvArgs) {
         if (theInstance != null) {
             throw new RuntimeException("Only a single instance is allowed.");
@@ -569,6 +573,9 @@ public class IGV implements IGVEventObserver {
      * Tracks are inserted to maintain ascending order by the order property.
      */
     public void addTrackPanel(Track track) {
+        if (squishTracks && track.hasRows()) {
+            track.setDisplayMode(Track.DisplayMode.SQUISHED);
+        }
         contentPane.getMainPanel().addTrackPanel(track);
     }
 
@@ -663,6 +670,26 @@ public class IGV implements IGVEventObserver {
             t.minimizeHeight();
         }
         repaint(tracks);
+    }
+
+    /**
+     * Set the global "squish" state.  All tracks with rows are set to SQUISHED (on) or EXPANDED (off).  While on,
+     * newly loaded tracks with rows are squished as well.
+     */
+    public void setSquishTracks(boolean squishTracks) {
+        this.squishTracks = squishTracks;
+        Track.DisplayMode mode = squishTracks ? Track.DisplayMode.SQUISHED : Track.DisplayMode.EXPANDED;
+        List<Track> tracks = getAllTracks();
+        for (Track t : tracks) {
+            if (t.hasRows()) {
+                t.setDisplayMode(mode);
+            }
+        }
+        repaint(tracks);
+    }
+
+    public boolean isSquishTracks() {
+        return squishTracks;
     }
 
     public Session getSession() {

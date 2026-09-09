@@ -46,6 +46,8 @@ public class SegTrack extends AbstractTrack {
                     Genome genome) {
 
         super(locator, id, name);
+        this.defaultExpandedRowHeight = EXPANDED_SAMPLE_HEIGHT;
+        this.defaultSquishedRowHeight = SQUISHED_SAMPLE_HEIGHT;
         this.rowHeight = EXPANDED_SAMPLE_HEIGHT;
         this.dataset = dataset;
         this.type = type;
@@ -94,6 +96,11 @@ public class SegTrack extends AbstractTrack {
     @Override
     public int getNumRows() {
         return sampleCount();
+    }
+
+    @Override
+    public boolean hasRows() {
+        return true;
     }
 
     @Override
@@ -202,6 +209,7 @@ public class SegTrack extends AbstractTrack {
 
         List<Component> items = new ArrayList<>();
 
+        items.addAll(TrackMenuUtils.getSquishExpandItems(Collections.singletonList(this)));
         items.add(TrackMenuUtils.getRowHeightItem(Collections.singletonList(this)));
         items.add(TrackMenuUtils.getMinimizeHeightItem(Collections.singletonList(this)));
 
