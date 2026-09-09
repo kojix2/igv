@@ -822,6 +822,12 @@ public abstract class AbstractTrack implements Track {
      * leaves the current row height unchanged.
      */
     public void setDisplayMode(DisplayMode mode) {
+        if (hasRows() && mode != this.displayMode && height == 0 && viewport != null) {
+            // The track is displayed and auto-sized to its content.  Pin the current visible height so that changing
+            // the mode, and hence the content height, does not change the height of the track itself.  Tracks that
+            // have not yet been displayed (viewport == null, e.g. during session loading) remain auto-sized.
+            this.height = getHeight();
+        }
         this.displayMode = mode;
         if (hasRows()) {
             if (mode == DisplayMode.SQUISHED) {
