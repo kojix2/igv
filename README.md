@@ -59,5 +59,11 @@ For more details on using Cognito for OAuth access, see
 the [UMCCR documentation on the backend](https://umccr.org/blog/igv-amazon-backend-setup/)
 and [frontend for a provisioning URL step by step guide](https://umccr.org/blog/igv-amazon-frontend-setup/).
 
+### More info
+
+The `CLAUDE.md` file provides guidance to Claude Code (claude.ai/code) when working with code in this repository and
+contains useful general information about the app, including build and run commands, architecture, and configuration.
+
+
 
  

@@ -66,3 +66,11 @@ After `createDist`, launch with `build/IGV-dist/igv.sh` (Linux), `igv.command` (
 **Track rendering:** `Track.render(Graphics2D g, RenderContext context)` is the core drawing method. `RenderContext` carries the current viewport locus, scale, and panel dimensions.
 
 **Session files:** Supported in both XML (legacy `.xml`) and JSON (`.json`) formats. The `session/` package handles serialization; example sessions are in `test/sessions/`.
+
+## Git commit messages
+
+- Keep commit messages extremely concise.
+- A single short subject line (under 50 characters) whenever possible; no body.
+- No bulleted lists, no recaps of what changed file-by-file, no explanation of the reasoning.
+- Add a body only when the *why* is genuinely non-obvious from the diff — then one or two sentences, not a summary of the change.
+
