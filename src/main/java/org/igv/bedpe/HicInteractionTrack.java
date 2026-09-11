@@ -97,10 +97,24 @@ public class HicInteractionTrack extends InteractionTrack {
             slider.addChangeListener(changeEvent -> {
                 JSlider source = (JSlider) changeEvent.getSource();
                 int value = source.getValue();
-                this.maxFeatureCount = value;
                 valueLabel.setText(String.valueOf(value));
+
+                // Changing the count invalidates the loaded data, so only act when the drag is
+                // finished -- reloading on every intermediate value would be needlessly expensive.
+                if (source.getValueIsAdjusting() || value == this.maxFeatureCount) {
+                    return;
+                }
+                this.maxFeatureCount = value;
                 this.loadedIntervalMap.clear();
-                this.repaint();
+
+                // Repaint through IGV, which reloads tracks that are not ready to paint.  A plain
+                // track repaint does not load, and would leave the track blank until something else
+                // (e.g. a window resize) triggered a load.
+                if (IGV.hasInstance()) {
+                    IGV.getInstance().repaint(this);
+                } else {
+                    this.repaint();
+                }
             });
 
             JPanel panel = new JPanel(new BorderLayout());
@@ -123,11 +137,21 @@ public class HicInteractionTrack extends InteractionTrack {
                 JRadioButtonMenuItem normItem = new JRadioButtonMenuItem(label);
                 normItem.setSelected(type.equals(normalization));
                 normItem.addActionListener(e -> {
+                    if (type.equals(this.normalization)) {
+                        return;
+                    }
                     this.normalization = type;
                     if (contactMapView != null) {
                         contactMapView.setNormalization(type);
                     }
-                    this.repaint();
+                    // The loaded intervals were fetched with the previous normalization, so they must
+                    // be reloaded.  Repaint through IGV, which loads tracks that are not ready to
+                    // paint; a plain track repaint would just redraw the stale data.
+                    if (IGV.hasInstance()) {
+                        IGV.getInstance().repaint(this);
+                    } else {
+                        this.repaint();
+                    }
                 });
                 normGroup.add(normItem);
                 items.add(normItem);
