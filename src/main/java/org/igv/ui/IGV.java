@@ -1919,7 +1919,7 @@ public class IGV implements IGVEventObserver {
                     }
                     Autoscaler.autoscale(getAllTracks());
                     checkPanelLayouts();
-                    component.paintImmediately(component.getBounds());
+                    component.paintImmediately(0, 0, component.getWidth(), component.getHeight());
                 } finally {
                     synchronized (IGV.getInstance()) {
                         IGV.getInstance().notifyAll();
@@ -1932,33 +1932,34 @@ public class IGV implements IGVEventObserver {
             // Hold lock for the entire check-and-set operation to prevent race conditions
             List<CompletableFuture<Void>> futures;
             synchronized (repaintLock) {
-                if (isLoading) {
-                    // Track data is being loaded. Just flag that a repaint is needed when loading completes.
-                    // Since repaint() has no state, we only need to know that *a* repaint was requested.
-                    repaintPending = true;
-                    return;
-                }
-
-                // Not currently loading - find tracks that need loading (not ready to paint)
+                // Find tracks that need loading (not ready to paint)
                 futures = new ArrayList<>();
                 for (ReferenceFrame frame : FrameManager.getFrames()) {
                     for (Track track : trackList) {
                         if (!track.isReadyToPaint(frame)) {
-                            futures.add(CompletableFuture.runAsync(() -> track.load(frame), threadExecutor));
+                            if (isLoading) {
+                                // A load is already in flight. Flag that another cycle is needed when it
+                                // completes; the pending cycle re-checks all tracks so nothing is lost.
+                                repaintPending = true;
+                                return;
+                            }
+                            futures.add(CompletableFuture.runAsync(() -> track.load(frame), threadExecutor)
+                                    .exceptionally(ex -> {
+                                        log.error("Error loading track data: " + track.getName(), ex);
+                                        return null;
+                                    }));
                         }
                     }
                 }
 
-                if (futures.isEmpty()) {
-                    // All tracks are ready to paint - no need to set isLoading
-                } else {
-                    // One or more tracks require loading before repaint - set loading flag while holding lock
+                if (!futures.isEmpty()) {
                     isLoading = true;
                 }
             }
 
             if (futures.isEmpty()) {
-                // All tracks are ready to paint
+                // All requested tracks are ready to paint. This runs even if an unrelated load is in
+                // flight -- renderers tolerate missing data, and expose events paint at any time anyway.
                 Autoscaler.autoscale(getAllTracks());
                 UIUtilities.invokeOnEventThread(() -> {
                     checkPanelLayouts();
@@ -1973,10 +1974,6 @@ public class IGV implements IGVEventObserver {
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).whenComplete((ignored, ex) -> {
                 WaitCursorManager.removeWaitCursor(token);
 
-                if (ex != null) {
-                    log.error("Error loading track data", ex);
-                }
-
                 // Check if a repaint was requested while loading, and reset state under lock
                 boolean needsRepaint;
                 synchronized (repaintLock) {
@@ -1985,17 +1982,22 @@ public class IGV implements IGVEventObserver {
                     repaintPending = false;
                 }
 
-                // Autoscale (modifies track internal state, not UI)
-                Autoscaler.autoscale(getAllTracks());
+                try {
+                    // Autoscale (modifies track internal state, not UI)
+                    Autoscaler.autoscale(getAllTracks());
+                } catch (Exception e) {
+                    // The returned future is discarded, so anything thrown here would otherwise vanish
+                    log.error("Error autoscaling after load", e);
+                }
 
                 // Check layouts and repaint on EDT
                 UIUtilities.invokeOnEventThread(() -> {
                     checkPanelLayouts();
                     component.repaint();
-                    // If a repaint was requested while loading, trigger another repaint cycle
-                    // to load any new data that may be needed
+                    // A repaint requested while loading may have targeted any panel, so re-issue
+                    // against the whole content pane rather than the component that started this load.
                     if (needsRepaint) {
-                        repaint(component, getAllTracks());
+                        repaint(contentPane, getAllTracks());
                     }
                 });
             });
