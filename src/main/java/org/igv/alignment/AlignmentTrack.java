@@ -314,7 +314,6 @@ public class AlignmentTrack extends AbstractTrack implements IGVEventObserver {
         // Optional sequence track (not common)
         if (prefs.getAsBoolean(SAM_SHOW_REF_SEQ)) {
             sequenceTrack = new SequenceTrack("Reference sequence");
-            sequenceTrack.setHeight(14);
         } else {
             sequenceTrack = null;
         }

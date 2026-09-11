@@ -292,6 +292,24 @@ public class SequenceTrack extends AbstractTrack implements IGVEventObserver {
                 0;
     }
 
+    /**
+     * The height of the sequence track is fixed by its content -- it is zero when zoomed out past the sequence
+     * resolution threshold, and otherwise sized to the sequence, and optional translation, it draws.
+     */
+    @Override
+    public int getHeight() {
+        return getContentHeight();
+    }
+
+    /**
+     * Ignored.  The sequence track height is not settable, by the user, a session, or a height change applied
+     * to a selection of tracks that happens to include it.  See {@link #getHeight()}.
+     */
+    @Override
+    public void setHeight(int height) {
+        // Intentionally empty
+    }
+
 
     @Override
     public boolean handleDataClick(TrackClickEvent e) {
