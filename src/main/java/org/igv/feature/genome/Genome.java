@@ -67,6 +67,9 @@ public class Genome {
     private final Sequence sequence;
     private final List<Hub> trackHubs;
 
+    // Urls of hubs declared by the genome that could not be loaded.  Tracked so they can be reported in the UI.
+    private final List<String> failedTrackHubs = new ArrayList<>();
+
     private long nominalLength = -1;
     private List<String> chromosomeNames;
     private List<String> longChromosomeNames;
@@ -239,7 +242,9 @@ public class Genome {
         }
 
         if (config.getHubs() != null) {
-            trackHubs.addAll(HubParser.loadHubs(config.getHubs()));
+            HubParser.HubLoadResult hubLoadResult = HubParser.loadHubs(config.getHubs());
+            trackHubs.addAll(hubLoadResult.hubs());
+            failedTrackHubs.addAll(hubLoadResult.failedUrls());
             // Set a "genomeHub", which by convention is the first
             // hub listed.
             if (trackHubs.size() > 0) {
@@ -806,6 +811,13 @@ public class Genome {
 
     public Collection<Hub> getTrackHubs() {
         return trackHubs;
+    }
+
+    /**
+     * @return urls of the hubs declared by this genome that could not be loaded
+     */
+    public Collection<String> getFailedTrackHubs() {
+        return failedTrackHubs;
     }
 
     public GenomeConfig getConfig() {

@@ -652,6 +652,14 @@ public class IGVMenuBar extends JMenuBar {
             }
         }
 
+        // Genome defined hubs that could not be loaded.  Shown disabled, rather than omitted, so it is clear that a
+        // hub is missing.  The reason is in the log.
+        for (String failedHubUrl : genome.getFailedTrackHubs()) {
+            JMenuItem failedItem = new JMenuItem(failedHubUrl + " (failed to load)");
+            failedItem.setEnabled(false);
+            hubsMenu.add(failedItem);
+        }
+
         // ENCODE items.  These will be hidden / shown depending on genome chosen
         String ucscId = genome.getUCSCId();
         if (EncodeTrackChooserFactory.genomeSupportedUCSC(ucscId) || EncodeTrackChooserFactory.genomeSupported(ucscId)) {

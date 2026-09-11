@@ -11,10 +11,8 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class HubParser {
 
@@ -25,7 +23,15 @@ public class HubParser {
             "genomesFile", "trackDb", "groups", "include", "html", "searchTrix", "groups",
             "chromSizes"));
 
-    private static final Map<String, Hub> hubCache = new HashMap<>();
+    /**
+     * Total time to wait for the hubs of a genome to load.  Hubs that have not loaded within this budget are skipped
+     * so that a slow or non-responsive hub server cannot block genome loading.  This is a budget for the genome's
+     * hubs as a whole, not per hub, so it can be generous without the wait scaling with the number of hubs.
+     */
+    private static final long HUB_LOAD_BUDGET_SECONDS = 20;
+
+    // Accessed from the hub loading threads started in loadHubs(), as well as the calling thread.
+    private static final Map<String, Hub> hubCache = new ConcurrentHashMap<>();
 
     public static Hub loadAssemblyHub(String url) throws IOException {
         return loadHub(url);
@@ -89,42 +95,80 @@ public class HubParser {
     }
 
     /**
-     * Load track hubs in parallel, but set a timeout to prevent a non-responsive hub server from preventing genome load
-     * @param ucscId
-     * @param hubUrls
-     * @return
+     * The result of loading a list of hubs -- those that loaded, and the urls of those that did not.  The failures
+     * are reported so that the caller can make them visible;  a hub that quietly disappears from the menu looks
+     * like a bug in IGV.
      */
-    public static List<Hub> loadHubs(List<String> hubUrls) {
+    public record HubLoadResult(List<Hub> hubs, List<String> failedUrls) {
+    }
 
-        List<CompletableFuture<Hub>> futures = IntStream.range(0, hubUrls.size())
-                .mapToObj(i -> CompletableFuture.supplyAsync(() -> {
-                    try {
-                        final Hub hub = HubParser.loadHub(hubUrls.get(i));
-                        hub.setOrder(i + 1);
+    /**
+     * Load track hubs in parallel, subject to an overall time budget (HUB_LOAD_BUDGET_SECONDS, shared by all of the
+     * genome's hubs) so that a slow or non-responsive hub server cannot block genome loading.  Hubs that fail to
+     * load, or that do not load within the budget, are reported as failures -- the url and reason are logged in
+     * both cases.
+     * <p>
+     * A hub that exceeds the budget is not abandoned, it is left to finish on its daemon thread and enters the hub
+     * cache, so it will be available the next time the genome is loaded.
+     *
+     * @param hubUrls
+     * @return the hubs that loaded, in the order given by hubUrls, and the urls of those that did not
+     */
+    public static HubLoadResult loadHubs(List<String> hubUrls) {
+
+        if (hubUrls == null || hubUrls.isEmpty()) {
+            return new HubLoadResult(Collections.emptyList(), Collections.emptyList());
+        }
+
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(HUB_LOAD_BUDGET_SECONDS);
+
+        ExecutorService executor = Executors.newFixedThreadPool(hubUrls.size(), runnable -> {
+            Thread thread = new Thread(runnable, "hub-loader");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+        try {
+            List<Future<Hub>> futures = hubUrls.stream()
+                    .map(url -> executor.submit(() -> {
+                        Hub hub = loadHub(url);
+                        if (System.nanoTime() > deadline) {
+                            log.warn("Track hub loaded after the " + HUB_LOAD_BUDGET_SECONDS + " second budget: " + url +
+                                    ".  It will be available the next time this genome is loaded.");
+                        }
                         return hub;
-                    } catch (Exception e) {
-                        // Throw a runtime exception to be caught later
-                        throw new RuntimeException("Error loading hub " + hubUrls.get(i), e);
-                    }
-                }))
-                .collect(Collectors.toList());
+                    }))
+                    .collect(Collectors.toList());
 
-        // Wait for all futures to complete and collect the results.
-        return futures.stream()
-                .map(future -> {
-                    try {
-                        // Set a timeout for each individual hub
-                        return future.get(10, TimeUnit.SECONDS);
-                    } catch (Exception e) {
-                        log.error("Error loading a hub", e);
-                        // Cancel the future if it times out or has an error
-                        future.cancel(true);
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparingInt(Hub::getOrder))
-                .collect(Collectors.toList());
+            List<Hub> hubs = new ArrayList<>(futures.size());
+            List<String> failedUrls = new ArrayList<>();
+            for (int i = 0; i < futures.size(); i++) {
+                String url = hubUrls.get(i);
+                try {
+                    // The timeout is a budget shared by all hubs, so the total wait is bounded regardless of their number
+                    Hub hub = futures.get(i).get(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+                    hub.setOrder(i + 1);
+                    hubs.add(hub);
+                } catch (TimeoutException e) {
+                    log.error("Track hub not loaded within the " + HUB_LOAD_BUDGET_SECONDS +
+                            " second budget for this genome's hubs: " + url);
+                    failedUrls.add(url);
+                } catch (ExecutionException e) {
+                    log.error("Error loading track hub: " + url, e.getCause());
+                    failedUrls.add(url);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.error("Interrupted loading track hubs: " + hubUrls.subList(i, hubUrls.size()));
+                    failedUrls.addAll(hubUrls.subList(i, hubUrls.size()));
+                    break;
+                }
+            }
+            return new HubLoadResult(hubs, failedUrls);
+
+        } finally {
+            // Does not interrupt hubs still loading;  they complete on their daemon threads and populate the cache.
+            executor.shutdown();
+        }
     }
 
     static List<Stanza> loadStanzas(String url) throws IOException {
