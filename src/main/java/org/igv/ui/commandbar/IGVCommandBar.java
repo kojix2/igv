@@ -439,10 +439,15 @@ public class IGVCommandBar extends javax.swing.JPanel implements IGVEventObserve
         squishTracksButton = new JideToggleButton();
         squishTracksButton.setAlignmentX(RIGHT_ALIGNMENT);
         // Collapse-all icon while off, expand-all while on (i.e. the action a click will perform)
-        squishTracksButton.setIcon(new javax.swing.ImageIcon(getClass().getResource(
-                darkMode ? "/images/collapseall.invert.gif" : "/images/collapseall.gif")));
-        squishTracksButton.setSelectedIcon(new javax.swing.ImageIcon(getClass().getResource(
-                darkMode ? "/images/expandall.invert.gif" : "/images/expandall.gif")));
+        javax.swing.ImageIcon squishOffIcon = new javax.swing.ImageIcon(getClass().getResource(
+                darkMode ? "/images/collapseall.invert.gif" : "/images/collapseall.gif"));
+        javax.swing.ImageIcon squishOnIcon = new javax.swing.ImageIcon(getClass().getResource(
+                darkMode ? "/images/expandall.invert.gif" : "/images/expandall.gif"));
+        squishTracksButton.setIcon(squishOffIcon);
+        squishTracksButton.setSelectedIcon(squishOnIcon);
+        // Without these, hovering while selected falls back to the "off" icon instead of the selected one
+        squishTracksButton.setRolloverIcon(squishOffIcon);
+        squishTracksButton.setRolloverSelectedIcon(squishOnIcon);
         squishTracksButton.setMaximumSize(new java.awt.Dimension(32, 32));
         squishTracksButton.setMinimumSize(new java.awt.Dimension(32, 32));
         squishTracksButton.setPreferredSize(new java.awt.Dimension(32, 32));
