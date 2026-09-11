@@ -31,4 +31,36 @@ public class HttpMappingsTest {
         assertEquals("https://hgdownload.soe.ucsc.edu/goldenPath/mm9/database/refGene.txt.gz", mappedUrl);
 
     }
+
+    @Test
+    public void mapRetiredHosts() throws MalformedURLException {
+
+        // TCGA moved to igv.org, from both the www and data hosts
+        String tcgaPath = "/gdac_stddata__2016_01_28/Sample_Set/ACC-TP/foo.seg.txt";
+        assertEquals("https://igv.org/tcga" + tcgaPath,
+                HttpMappings.mapURL("https://data.broadinstitute.org/igvdata/tcga" + tcgaPath));
+        assertEquals("https://igv.org/tcga" + tcgaPath,
+                HttpMappings.mapURL("http://www.broadinstitute.org/igvdata/tcga" + tcgaPath));
+
+        // The generic igvdata rule must not shadow the tcga rule above
+        assertEquals("https://data.broadinstitute.org/igvdata/foo.bed",
+                HttpMappings.mapURL("http://www.broadinstitute.org/igvdata/foo.bed"));
+
+        // Retired hosts are mapped to https even when requested over http
+        assertEquals("https://s3.amazonaws.com/igv.broadinstitute.org/data/foo.bed",
+                HttpMappings.mapURL("http://igvdata.broadinstitute.org/data/foo.bed"));
+        assertEquals("https://s3.amazonaws.com/igv.broadinstitute.org/data/foo.bed",
+                HttpMappings.mapURL("http://igv.broadinstitute.org/data/foo.bed"));
+
+        // genepattern bucket, regional form
+        assertEquals("https://igv-genepattern-org.s3.us-east-1.amazonaws.com/data/foo.bed",
+                HttpMappings.mapURL("https://igv.genepattern.org/data/foo.bed"));
+
+        // NCBI GEO ftp is served over https
+        assertEquals("https://ftp.ncbi.nlm.nih.gov/geo/series/GSE1nnn/foo.txt.gz",
+                HttpMappings.mapURL("ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE1nnn/foo.txt.gz"));
+
+        assertEquals("https://dl.dropboxusercontent.com/s/abc/foo.bam",
+                HttpMappings.mapURL("https://www.dropbox.com/s/abc/foo.bam"));
+    }
 }

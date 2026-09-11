@@ -10,20 +10,54 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.HashMap;
+import java.net.URLConnection;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class HttpMappings {
 
     private static Logger log = LogManager.getLogger(HttpMappings.class);
-    private static Map<String, String> mappedURLCache = new HashMap<>();
+    private static Map<String, String> mappedURLCache = new ConcurrentHashMap<>();
+
+    private static final String MAPPING_URL =
+            "https://raw.githubusercontent.com/igvteam/igv-data/refs/heads/main/data/url_mappings.tsv";
 
     static {
-        mappedURLCache.put("https://raw.githubusercontent.com/igvteam/igv-data/refs/heads/main/data/url_mappings.tsv",
-                "https://raw.githubusercontent.com/igvteam/igv-data/refs/heads/main/data/url_mappings.tsv");
+        mappedURLCache.put(MAPPING_URL, MAPPING_URL);
     }
 
-    static Map<String, String> urlMappings = new HashMap<>();
+    static Map<String, String> urlMappings = new ConcurrentHashMap<>();
+
+    /**
+     * Bound the wait on the mapping table.  Unlike igv.js, which consults the table only after a request has already
+     * failed, this fetch is on the main path -- the first url IGV maps blocks on it -- so an unreachable or slow host
+     * must not stall genome loading.
+     */
+    private static final int MAPPING_TIMEOUT = 5000;
+
+    /**
+     * Set once the table has been fetched, successfully or not.  A failure is not retried: the fetch is on the main
+     * path, and retrying it on every subsequent url would pay the timeout over and over.
+     */
+    private static volatile boolean mappingsLoaded = false;
+
+    /**
+     * Hosts that have moved wholesale.  Unlike the entries in the mapping table these are keyed by prefix, so one
+     * rule retires every resource under the old host.  Order matters: the first matching prefix wins, so a rule for
+     * a path under a retired host must precede the rule for the host itself.  The replacements are https only.
+     *
+     * Kept in sync with the RETIRED_HOSTS table in igv.js (igv-utils "igvxhr").
+     */
+    private static final List<String[]> RETIRED_HOSTS = List.of(
+            new String[]{"//data.broadinstitute.org/igvdata/tcga", "//igv.org/tcga"},
+            new String[]{"//www.broadinstitute.org/igvdata/tcga", "//igv.org/tcga"},
+            new String[]{"//www.broadinstitute.org/igvdata", "//data.broadinstitute.org/igvdata"},
+            new String[]{"//igvdata.broadinstitute.org", "//s3.amazonaws.com/igv.broadinstitute.org"},
+            new String[]{"//igv.broadinstitute.org", "//s3.amazonaws.com/igv.broadinstitute.org"},
+            new String[]{"//dn7ywbm9isq8j.cloudfront.net", "//s3.amazonaws.com/igv.broadinstitute.org"},
+            new String[]{"//igv.genepattern.org", "//igv-genepattern-org.s3.us-east-1.amazonaws.com"}
+    );
 
 
     private HttpMappings() {
@@ -40,32 +74,42 @@ public class HttpMappings {
      */
     public static String mapURL(String urlString) throws MalformedURLException {
 
-        // Check cache to avoid unnecessary lookups
-        if (mappedURLCache.containsKey(urlString)) {
-            return mappedURLCache.get(urlString);
+        // Check cache to avoid unnecessary lookups.  Neither map holds null values, so a null get means "absent".
+        String cached = mappedURLCache.get(urlString);
+        if (cached != null) {
+            return cached;
         }
 
-        if (urlMappings.isEmpty()) {
+        // checkStaticMappings below reassigns urlString -- the cache must be keyed on the url the caller asked for
+        final String requestedURL = urlString;
+
+        if (!mappingsLoaded) {
             loadMappings();
         }
 
-        String mappedURL;
-        if(urlMappings.containsKey(urlString)) {
-            mappedURL = urlMappings.get(urlString);
-        } else {
+        String mappedURL = urlMappings.get(urlString);
+        if (mappedURL == null) {
             urlString = checkStaticMappings(urlString);
             String key = urlString.startsWith("s3://") || urlString.contains("amazonaws.com") ? getAmazonKey(urlString) : urlString;
-            mappedURL = urlMappings.containsKey(key) ? urlMappings.get(key) : urlString;
+            mappedURL = urlMappings.getOrDefault(key, urlString);
         }
-        mappedURLCache.put(urlString, mappedURL);       // Record even if not mapped to prevent further lookups
+        mappedURLCache.put(requestedURL, mappedURL);       // Record even if not mapped to prevent further lookups
         return mappedURL;
     }
 
-    private static void loadMappings() {
+    private static synchronized void loadMappings() {
+
+        if (mappingsLoaded) {
+            return;     // Another thread got here first
+        }
+        mappingsLoaded = true;      // Set before the fetch -- a failure is recorded, not retried
 
         try {
-            URL fileUrl = new URL("https://raw.githubusercontent.com/igvteam/igv-data/refs/heads/main/data/url_mappings.tsv");
-            try (InputStream inputStream = fileUrl.openStream();
+            URL fileUrl = new URL(MAPPING_URL);
+            URLConnection conn = fileUrl.openConnection();
+            conn.setConnectTimeout(MAPPING_TIMEOUT);
+            conn.setReadTimeout(MAPPING_TIMEOUT);
+            try (InputStream inputStream = conn.getInputStream();
                  BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -93,11 +137,27 @@ public class HttpMappings {
         return "S3::: " + (new URL(url.replace("s3://", "https://")).getPath());
     }
 
+    /**
+     * Return the replacement for a url under a retired host, or null if it is not under one.  These are not a
+     * fallback: the old host cannot serve the resource, so the substitution is made before the request goes out.
+     */
+    private static String mapRetiredHost(String urlString) {
+        for (String[] rule : RETIRED_HOSTS) {
+            if (urlString.contains(rule[0])) {
+                // These urls are widely bookmarked in their original http form
+                return urlString.replace(rule[0], rule[1]).replaceFirst("^http:", "https:");
+            }
+        }
+        return null;
+    }
+
     private static String checkStaticMappings(String urlString) throws MalformedURLException {
         if (urlString.startsWith("htsget://")) {
             urlString = urlString.replace("htsget://", "https://");
         } else if (urlString.startsWith("gs://")) {
             urlString = GoogleUtils.translateGoogleCloudURL(urlString);
+        } else if (urlString.startsWith("ftp://ftp.ncbi.nlm.nih.gov/geo")) {
+            urlString = urlString.replace("ftp://", "https://");
         }
 
         if (GoogleUtils.isGoogleURL(urlString)) {
@@ -105,21 +165,17 @@ public class HttpMappings {
                 urlString = URLUtils.addParameter(urlString, "alt=media");
             }
         }
+
+        String retired = mapRetiredHost(urlString);
+        if (retired != null) {
+            return retired;
+        }
+
         String host = URLUtils.getHost(urlString);
-        if (host.equals("igv.broadinstitute.org")) {
-            urlString = urlString.replace("igv.broadinstitute.org", "s3.amazonaws.com/igv.broadinstitute.org");
-        } else if (host.equals("igvdata.broadinstitute.org")) {
-            urlString = urlString.replace("igvdata.broadinstitute.org", "s3.amazonaws.com/igv.broadinstitute.org");
-        } else if (host.equals("dn7ywbm9isq8j.cloudfront.net")) {
-            urlString = urlString.replace("dn7ywbm9isq8j.cloudfront.net", "s3.amazonaws.com/igv.broadinstitute.org");
-        } else if (host.equals("www.broadinstitute.org")) {
-            urlString = urlString.replace("www.broadinstitute.org/igvdata", "data.broadinstitute.org/igvdata");
-        } else if (host.equals("www.dropbox.com")) {
+        if (host.equals("www.dropbox.com")) {
             urlString = urlString.replace("//www.dropbox.com", "//dl.dropboxusercontent.com");
         } else if (host.equals("drive.google.com")) {
             urlString = GoogleUtils.driveDownloadURL(urlString);
-        } else if (host.equals("igv.genepattern.org")) {
-            urlString = urlString.replace("//igv.genepattern.org", "//igv-genepattern-org.s3.amazonaws.com");
         }
 
         // data.broadinstitute.org requires https
